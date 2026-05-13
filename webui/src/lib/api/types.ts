@@ -129,6 +129,8 @@ export interface CreateRunInput {
     mode: TestMode;
     name?: string;
     description?: string;
+    notes?: string;
+    tags?: string[];
 }
 
 /** One-shot helper used by the run-new page */

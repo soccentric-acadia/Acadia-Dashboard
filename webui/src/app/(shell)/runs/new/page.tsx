@@ -9,7 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getModuleRegistry, getModuleLabel, getCategoryForModule } from "@/lib/proto/registry";
 import { useBoard } from "@/lib/board/context";
-import { useConfigureRun, useStartRun } from "@/lib/api/queries";
+import { useCreateConfig, useCreateRun } from "@/lib/api/queries";
+import type { ModuleConfig } from "@/lib/api/types";
 import type { TestMode } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -333,8 +334,8 @@ function NewRunContent() {
     const [moduleId, setModuleId] = useState("");
     const [config, setConfig] = useState<ConfigValues>({});
 
-    const configureRunMut = useConfigureRun();
-    const startRunMut = useStartRun();
+    const createConfigMut = useCreateConfig();
+    const createRunMut = useCreateRun();
 
     const currentIndex = STEPS.findIndex((s) => s.id === step);
 
@@ -380,20 +381,28 @@ function NewRunContent() {
     const handleStart = async () => {
         if (!board) { toast.error("No board configured"); return; }
         try {
-            const result = await configureRunMut.mutateAsync({
-                clientId: board.clientId,
-                moduleId,
+            const cfgPayload = buildConfig();
+            const modules: ModuleConfig[] = [{ id: moduleId, enabled: true, config_payload: cfgPayload, notes: "" }];
+            const testConfig = await createConfigMut.mutateAsync({
+                name: basics.runName,
                 mode,
-                config: buildConfig(),
+                modules,
+                common_config: cfgPayload,
             });
-            await startRunMut.mutateAsync(result.runId);
-            router.push(`/runs/${result.runId}`);
+            const run = await createRunMut.mutateAsync({
+                config_id: testConfig.id,
+                mode,
+                name: basics.runName,
+                notes: basics.description,
+                tags: basics.tags ? basics.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+            });
+            router.push(`/runs/${run.id}`);
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Failed to start run");
         }
     };
 
-    const isLaunching = configureRunMut.isPending || startRunMut.isPending;
+    const isLaunching = createConfigMut.isPending || createRunMut.isPending;
 
     return (
         <div className="mx-auto max-w-2xl space-y-6">
@@ -448,7 +457,7 @@ function NewRunContent() {
                             mode={mode}
                             moduleId={moduleId}
                             config={config}
-                            boardHostname={board?.hostname ?? board?.clientId ?? "—"}
+                            boardHostname={board?.name || board?.hostname || "—"}
                         />
                     )}
                 </CardContent>

@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { AlertCircle, GitCompare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getModuleLabel } from "@/lib/proto/registry";
 
 function DiffValue({ a, b }: { a: unknown; b: unknown }) {
     const changed = JSON.stringify(a) !== JSON.stringify(b);
@@ -61,14 +60,14 @@ function CompareContent() {
     }
 
     const fields: Array<{ label: string; a: unknown; b: unknown }> = [
-        { label: "Module", a: getModuleLabel(runA.moduleId), b: getModuleLabel(runB.moduleId) },
-        { label: "Mode", a: runA.mode, b: runB.mode },
-        { label: "State", a: runA.state, b: runB.state },
-        { label: "Pass/Fail", a: runA.passFail == null ? "—" : runA.passFail ? "PASS" : "FAIL", b: runB.passFail == null ? "—" : runB.passFail ? "PASS" : "FAIL" },
-        { label: "Result batches", a: runA.batchCount, b: runB.batchCount },
-        { label: "Samples", a: runA.sampleCount, b: runB.sampleCount },
-        { label: "Started", a: runA.startedAt ? new Date(runA.startedAt).toLocaleString() : "—", b: runB.startedAt ? new Date(runB.startedAt).toLocaleString() : "—" },
-        { label: "Ended", a: (runA.endedAt ?? runA.completedAt) ? new Date((runA.endedAt ?? runA.completedAt)!).toLocaleString() : "—", b: (runB.endedAt ?? runB.completedAt) ? new Date((runB.endedAt ?? runB.completedAt)!).toLocaleString() : "—" },
+        { label: "Name",        a: runA.name,   b: runB.name },
+        { label: "Mode",        a: runA.mode,   b: runB.mode },
+        { label: "Status",      a: runA.status, b: runB.status },
+        { label: "Baseline",    a: runA.baseline_flag ? "Yes" : "No", b: runB.baseline_flag ? "Yes" : "No" },
+        { label: "Created by",  a: runA.created_by, b: runB.created_by },
+        { label: "Started",     a: runA.started_at ? new Date(runA.started_at).toLocaleString() : "—", b: runB.started_at ? new Date(runB.started_at).toLocaleString() : "—" },
+        { label: "Ended",       a: runA.ended_at ? new Date(runA.ended_at).toLocaleString() : "—", b: runB.ended_at ? new Date(runB.ended_at).toLocaleString() : "—" },
+        { label: "Error",       a: runA.error_message ?? "—", b: runB.error_message ?? "—" },
     ];
 
     return (
@@ -84,10 +83,10 @@ function CompareContent() {
                     <Card key={i}>
                         <CardContent className="pt-4 pb-4">
                             <p className="text-xs text-muted-foreground mb-1">{i === 0 ? "Run A (baseline)" : "Run B (comparison)"}</p>
-                            <p className="font-mono text-sm font-medium">{run.runId.slice(0, 12)}…</p>
+                            <p className="font-mono text-sm font-medium">{run.id.slice(0, 12)}…</p>
                             <div className="flex items-center gap-2 mt-1">
-                                <RunStateBadge state={run.state} />
-                                <Badge variant="outline" className="text-xs">{run.moduleId}</Badge>
+                                <RunStateBadge state={run.status} />
+                                <Badge variant="outline" className="text-xs capitalize">{run.mode}</Badge>
                             </div>
                         </CardContent>
                     </Card>
@@ -99,8 +98,8 @@ function CompareContent() {
                 <CardHeader>
                     <CardTitle className="text-base">Field comparison</CardTitle>
                     <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mt-1">
-                        <span>Run A ({runA.runId.slice(0, 8)}…)</span>
-                        <span>Run B ({runB.runId.slice(0, 8)}…)</span>
+                        <span>Run A ({runA.id.slice(0, 8)}…)</span>
+                        <span>Run B ({runB.id.slice(0, 8)}…)</span>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-0 divide-y">

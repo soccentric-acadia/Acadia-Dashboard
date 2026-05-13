@@ -1,14 +1,13 @@
 "use client";
 
 import { useBoard } from "@/lib/board/context";
-import { useHealth } from "@/lib/api/queries";
+import { useHealth, useRuns } from "@/lib/api/queries";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { Circle, Cpu, Moon, Sun, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "./user-menu";
 import Link from "next/link";
-import { useRuns } from "@/lib/api/queries";
 import { useState, useEffect } from "react";
 
 function BoardStatus({ online }: { online: boolean }) {
@@ -20,14 +19,14 @@ function BoardStatus({ online }: { online: boolean }) {
     );
 }
 
-function ActivityBadge({ clientId }: { clientId: string }) {
-    const { data } = useRuns({ clientId, state: "running", limit: 1 });
-    const active = data?.edges?.[0]?.node;
+function ActiveRunBadge() {
+    const { data } = useRuns({ status: "running", limit: 1 });
+    const active = data?.runs?.[0];
     if (!active) return null;
     return (
         <span className="flex items-center gap-1.5 text-xs text-blue-500">
             <Circle className="h-2 w-2 fill-current animate-pulse" />
-            Running: <Link href={`/runs/${active.runId}`} className="hover:underline font-medium truncate max-w-[12rem]">{active.moduleId}</Link>
+            Running: <Link href={`/runs/${active.id}`} className="hover:underline font-medium truncate max-w-[12rem]">{active.name || active.id.slice(0, 12)}</Link>
         </span>
     );
 }
@@ -40,14 +39,13 @@ export function BoardHeader() {
     useEffect(() => setMounted(true), []);
 
     const serverReachable = Boolean(health);
-    const boardOnline = board?.isConnected ?? false;
+    const boardOnline = board?.status === "online";
 
     const cycleTheme = () => {
-        if (theme === "system") setTheme("light");
+        if (theme === "system")     setTheme("light");
         else if (theme === "light") setTheme("dark");
-        else setTheme("system");
+        else                        setTheme("system");
     };
-    // Use Monitor as placeholder before mount to avoid hydration mismatch
     const ThemeIcon = !mounted ? Monitor : (theme === "dark" ? Moon : theme === "light" ? Sun : Monitor);
 
     if (!board) {
@@ -55,9 +53,9 @@ export function BoardHeader() {
             <header className="flex h-16 items-center justify-between border-b border-border/50 bg-background/80 backdrop-blur-md px-6 shrink-0 z-10 sticky top-0">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Cpu className="h-5 w-5" />
-                    <span className="font-medium">No board configured</span>
+                    <span className="font-medium">No board connected</span>
                     <Link href="/settings" className="text-primary text-xs hover:text-primary/80 transition-colors ml-2 font-medium">
-                        → Add board
+                        \u2192 Settings
                     </Link>
                 </div>
                 <div className="flex items-center gap-2">
@@ -80,20 +78,20 @@ export function BoardHeader() {
             <div className="flex items-center gap-4 min-w-0">
                 <div className="flex items-center gap-2.5 min-w-0 bg-secondary/50 px-3 py-1.5 rounded-full border border-border/50">
                     <Cpu className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="font-semibold text-sm truncate tracking-tight">{board.hostname ?? board.clientId}</span>
+                    <span className="font-semibold text-sm truncate tracking-tight">{board.name || board.hostname}</span>
                     <div className="w-px h-3 bg-border mx-1" />
                     <BoardStatus online={boardOnline} />
                 </div>
 
                 <div className="hidden md:flex items-center gap-3 text-xs text-muted-foreground bg-muted/50 px-3 py-1 rounded-full border border-border/40">
-                    {board.halVersion && <span>HAL {board.halVersion}</span>}
-                    {board.clientVersion && <span>Client {board.clientVersion}</span>}
+                    {board.hal_version    && <span>HAL {board.hal_version}</span>}
+                    {board.client_version && <span>Client {board.client_version}</span>}
                     {!serverReachable && (
                         <span className="text-amber-500 font-medium">Server unreachable</span>
                     )}
                 </div>
 
-                {board.clientId && <ActivityBadge clientId={board.clientId} />}
+                <ActiveRunBadge />
             </div>
 
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>

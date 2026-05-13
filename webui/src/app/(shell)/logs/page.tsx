@@ -1,19 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRuns } from "@/lib/api/queries";
-import { getWSClient } from "@/lib/api/ws";
-import { getModuleLabel } from "@/lib/utils";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useRuns, useRunLogs } from "@/lib/api/queries";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import Link from "next/link";
-import type { WSLogLine } from "@/lib/api/ws";
 import { Terminal, Search } from "lucide-react";
+import type { LogEntry } from "@/lib/api/types";
 
 const LEVEL_COLORS: Record<string, string> = {
+    error: "text-red-400",
+    warn: "text-yellow-400",
+    warning: "text-yellow-400",
+    info: "text-blue-400",
+    debug: "text-muted-foreground",
     ERROR: "text-red-400",
     WARN: "text-yellow-400",
     INFO: "text-blue-400",
@@ -21,45 +22,29 @@ const LEVEL_COLORS: Record<string, string> = {
 };
 
 export default function LogsPage() {
-    const { data: runs } = useRuns({ limit: 20 });
+    const { data: runs } = useRuns({ limit: 30 });
     const [selectedRunId, setSelectedRunId] = useState<string>("");
-    const [logs, setLogs] = useState<WSLogLine[]>([]);
     const [filter, setFilter] = useState("");
     const logsEndRef = useRef<HTMLDivElement>(null as unknown as HTMLDivElement);
 
-    // Switch subscription when selected run changes
-    useEffect(() => {
-        if (!selectedRunId) return;
-        const ws = getWSClient();
-        setLogs([]);
+    const { data: logData } = useRunLogs(selectedRunId || null, {});
 
-        const handleLog = (log: WSLogLine) => {
-            if (log.runId === selectedRunId) {
-                setLogs((prev) => [...prev.slice(-5000), log]);
-            }
-        };
-        ws.on("log_line", handleLog);
-        ws.subscribe(selectedRunId);
-
-        return () => {
-            ws.off("log_line", handleLog);
-            ws.unsubscribe(selectedRunId);
-        };
-    }, [selectedRunId]);
+    const logs: LogEntry[] = logData ?? [];
 
     // Auto-scroll
     useEffect(() => {
         logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [logs]);
 
-    const activeRuns = runs?.edges ?? [];
     const filteredLogs = filter
         ? logs.filter(
             (l) =>
-                (l.message ?? l.text).toLowerCase().includes(filter.toLowerCase()) ||
-                l.source.toLowerCase().includes(filter.toLowerCase())
+                (l.message ?? "").toLowerCase().includes(filter.toLowerCase()) ||
+                (l.source ?? "").toLowerCase().includes(filter.toLowerCase())
         )
         : logs;
+
+    const runList = runs?.runs ?? [];
 
     return (
         <div className="space-y-6">
@@ -68,60 +53,56 @@ export default function LogsPage() {
             <div className="flex gap-3 flex-wrap">
                 <Select value={selectedRunId} onValueChange={setSelectedRunId}>
                     <SelectTrigger className="w-80">
-                        <SelectValue placeholder="Select a run to tail logs…" />
+                        <SelectValue placeholder="Select a run to view logs\u2026" />
                     </SelectTrigger>
                     <SelectContent>
-                        {activeRuns.map(({ node }) => (
-                            <SelectItem key={node.runId} value={node.runId}>
-                                <span className="font-mono text-xs">{node.runId.slice(0, 16)}</span>
-                                <span className="ml-2 text-muted-foreground">{getModuleLabel(node.moduleId)}</span>
+                        {runList.map((run) => (
+                            <SelectItem key={run.id} value={run.id}>
+                                <span className="font-mono text-xs">{run.id.slice(0, 16)}</span>
+                                <span className="ml-2 text-muted-foreground">{run.name}</span>
                             </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
 
-                <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Filter logs…"
-                        className="pl-8 w-64"
+                        placeholder="Filter messages\u2026"
+                        className="pl-8"
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
                     />
                 </div>
-
-                <Button variant="outline" size="sm" onClick={() => setLogs([])}>
-                    Clear
-                </Button>
-
-                {logs.length > 0 && (
-                    <Badge variant="secondary">{logs.length} lines</Badge>
-                )}
             </div>
 
             <Card>
                 <CardContent className="p-0">
-                    <div className="h-[600px] overflow-y-auto font-mono text-xs p-3 bg-muted/30 rounded-md space-y-0.5">
+                    <div className="h-[60vh] overflow-y-auto bg-zinc-950 rounded-md font-mono text-xs p-4 space-y-0.5">
                         {!selectedRunId ? (
-                            <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
-                                <Terminal className="h-12 w-12" />
-                                <p>Select a run to view its logs</p>
+                            <div className="flex items-center justify-center h-full text-muted-foreground gap-2">
+                                <Terminal className="h-5 w-5" />
+                                <span>Select a run to view its logs</span>
                             </div>
                         ) : filteredLogs.length === 0 ? (
-                            <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
-                                <p>{filter ? "No logs match your filter." : "Waiting for log lines…"}</p>
+                            <div className="flex items-center justify-center h-full text-muted-foreground gap-2">
+                                <Terminal className="h-5 w-5" />
+                                <span>No logs found</span>
                             </div>
                         ) : (
-                            filteredLogs.map((log, i) => (
-                                <div key={i} className="flex gap-2 items-start leading-5">
-                                    <span className="text-muted-foreground shrink-0">
-                                        {new Date(log.timestamp).toLocaleTimeString()}
+                            filteredLogs.map((log) => (
+                                <div key={log.id} className="flex gap-2 items-start">
+                                    <span className="text-muted-foreground/50 shrink-0 tabular-nums">
+                                        {log.timestamp ? new Date(log.timestamp).toISOString().slice(11, 23) : "—"}
                                     </span>
-                                    <span className={`shrink-0 w-12 ${LEVEL_COLORS[log.level as string] ?? ""}`}>
-                                        {log.level}
-                                    </span>
-                                    <span className="shrink-0 text-muted-foreground">[{log.source}]</span>
-                                    <span className="break-all">{log.message ?? log.text}</span>
+                                    <Badge
+                                        variant="outline"
+                                        className={`shrink-0 text-[10px] px-1 py-0 ${LEVEL_COLORS[log.severity] ?? "text-muted-foreground"}`}
+                                    >
+                                        {(log.severity ?? "info").toUpperCase().slice(0, 4)}
+                                    </Badge>
+                                    <span className="text-muted-foreground/70 shrink-0">{log.source}</span>
+                                    <span className="text-zinc-100 break-all">{log.message}</span>
                                 </div>
                             ))
                         )}
@@ -129,16 +110,6 @@ export default function LogsPage() {
                     </div>
                 </CardContent>
             </Card>
-
-            {selectedRunId && (
-                <p className="text-xs text-muted-foreground">
-                    Viewing live logs for run{" "}
-                    <Link href={`/runs/${selectedRunId}`} className="underline font-mono">
-                        {selectedRunId.slice(0, 16)}
-                    </Link>
-                    . Open the run page to control the run.
-                </p>
-            )}
         </div>
     );
 }

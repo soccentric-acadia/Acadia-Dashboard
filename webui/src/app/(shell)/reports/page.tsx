@@ -11,10 +11,10 @@ import { RunStateBadge } from "@/components/runs/run-state-badge";
 
 export default function ReportsPage() {
     const { board } = useBoard();
-    const { data: runsData } = useRuns({ clientId: board?.clientId, limit: 20 });
-    const runs = runsData?.edges?.map((e) => e.node) ?? [];
+    const { data: runsData } = useRuns({ limit: 20 });
+    const runs = runsData?.runs ?? [];
 
-    const completedRuns = runs.filter((r) => r.state === "completed" || r.state === "stopped" || r.state === "failed");
+    const completedRuns = runs.filter((r) => r.status === "completed" || r.status === "cancelled" || r.status === "failed");
 
     const handleGenerate = (runId: string) => {
         toast.info(`Report generation for run ${runId.slice(0, 8)}… coming soon.`);
@@ -43,14 +43,14 @@ export default function ReportsPage() {
                     ) : (
                         <div className="divide-y">
                             {completedRuns.map((run) => (
-                                <div key={run.runId} className="flex items-center justify-between py-3 gap-4">
+                                <div key={run.id} className="flex items-center justify-between py-3 gap-4">
                                     <div className="min-w-0">
-                                        <p className="text-sm font-medium font-mono truncate">{run.runId.slice(0, 12)}…</p>
+                                        <p className="text-sm font-medium font-mono truncate">{run.id.slice(0, 12)}…</p>
                                         <div className="flex items-center gap-2 mt-0.5">
-                                            <Badge variant="outline" className="text-xs">{run.moduleId}</Badge>
-                                            <RunStateBadge state={run.state} />
+                                            <Badge variant="outline" className="text-xs capitalize">{run.mode}</Badge>
+                                            <RunStateBadge state={run.status} />
                                             <span className="text-xs text-muted-foreground">
-                                                {new Date(run.createdAt).toLocaleDateString()}
+                                                {new Date(run.created_at).toLocaleDateString()}
                                             </span>
                                         </div>
                                     </div>
@@ -58,7 +58,7 @@ export default function ReportsPage() {
                                         <Button
                                             size="sm"
                                             variant="outline"
-                                            onClick={() => handleGenerate(run.runId)}
+                                            onClick={() => handleGenerate(run.id)}
                                         >
                                             <Download className="h-3.5 w-3.5 mr-1.5" />
                                             PDF
@@ -66,7 +66,7 @@ export default function ReportsPage() {
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() => handleGenerate(run.runId)}
+                                            onClick={() => handleGenerate(run.id)}
                                         >
                                             HTML
                                         </Button>

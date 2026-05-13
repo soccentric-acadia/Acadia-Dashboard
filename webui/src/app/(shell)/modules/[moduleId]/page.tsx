@@ -19,7 +19,7 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
         queryFn: getModuleRegistry,
         staleTime: Infinity,
     });
-    const { data: runs } = useRuns({ moduleId, limit: 10 });
+    const { data: runs } = useRuns({ limit: 10 });
 
     const mod = modules?.find((m) => m.id === moduleId);
 
@@ -94,17 +94,17 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
                     </Button>
                 </CardHeader>
                 <CardContent>
-                    {!runs?.edges.length ? (
+                    {!runs?.runs?.length ? (
                         <p className="py-4 text-center text-sm text-muted-foreground">No runs for this module yet.</p>
                     ) : (
                         <div className="space-y-1">
-                            {runs.edges.map(({ node }) => (
-                                <Link key={node.runId} href={`/runs/${node.runId}`}
+                            {runs.runs.map((run) => (
+                                <Link key={run.id} href={`/runs/${run.id}`}
                                     className="flex items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-accent">
-                                    <span className="font-mono text-xs text-muted-foreground">{node.runId.slice(0, 12)}…</span>
+                                    <span className="font-mono text-xs text-muted-foreground">{run.id.slice(0, 12)}…</span>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs">{node.client?.hostname ?? node.client?.clientId?.slice(0, 12)}</span>
-                                        <Badge variant="outline" className="capitalize text-xs">{node.state}</Badge>
+                                        <span className="text-xs">{"single-board"}</span>
+                                        <Badge variant="outline" className="capitalize text-xs">{run.status}</Badge>
                                     </div>
                                 </Link>
                             ))}

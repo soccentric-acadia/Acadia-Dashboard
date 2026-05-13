@@ -64,8 +64,8 @@ export default function OtaPage() {
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                         {[
                             { label: "OS", value: "—" },
-                            { label: "HAL", value: board?.halVersion ?? "—" },
-                            { label: "Client", value: board?.clientVersion ?? "—" },
+                            { label: "HAL", value: board?.hal_version ?? "—" },
+                            { label: "Client", value: board?.client_version ?? "—" },
                             { label: "Board", value: board?.hostname ?? "Not connected" },
                         ].map(({ label, value }) => (
                             <div key={label} className="space-y-0.5">

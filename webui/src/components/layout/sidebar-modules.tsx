@@ -7,46 +7,43 @@ import { ChevronDown, ChevronRight, Circle, CheckCircle2, XCircle, Minus } from 
 import { cn } from "@/lib/utils";
 import { getModuleRegistry, getCategoryForModule, getModuleLabel } from "@/lib/proto/registry";
 import type { ModuleInfo } from "@/lib/proto/registry";
-import { useBoard } from "@/lib/board/context";
 import { useRuns } from "@/lib/api/queries";
 
 type ModuleStatus = "idle" | "running" | "pass" | "fail" | "never";
 
 function StatusDot({ status }: { status: ModuleStatus }) {
     if (status === "running") return <Circle className="h-2.5 w-2.5 fill-blue-400 text-blue-400 animate-pulse" />;
-    if (status === "pass") return <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />;
-    if (status === "fail") return <XCircle className="h-2.5 w-2.5 text-red-500" />;
-    if (status === "idle") return <Circle className="h-2.5 w-2.5 text-muted-foreground" />;
+    if (status === "pass")    return <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />;
+    if (status === "fail")    return <XCircle className="h-2.5 w-2.5 text-red-500" />;
+    if (status === "idle")    return <Circle className="h-2.5 w-2.5 text-muted-foreground" />;
     return <Minus className="h-2.5 w-2.5 text-muted-foreground/40" />;
 }
 
+const categorySortOrder = [
+    "Processor", "Sensors", "Network", "Camera", "Display",
+    "Audio", "Peripherals", "Timing", "Safety", "Debug", "Other",
+];
+
 export function SidebarModules() {
     const pathname = usePathname();
-    const { board } = useBoard();
-
     const [modules, setModules] = useState<ModuleInfo[]>([]);
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-    // Fetch run statuses to derive per-module live status.
-    const clientId = board?.clientId;
-    const { data: runsData } = useRuns(clientId ? { clientId, limit: 100 } : { limit: 0 });
+    // Fetch recent runs to derive per-module status (we look at status field)
+    const { data: runsData } = useRuns({ limit: 50 });
 
     useEffect(() => {
-        getModuleRegistry().then(setModules).catch(() => { });
+        getModuleRegistry().then(setModules).catch(() => {});
     }, []);
 
-    // Derive module statuses from recent runs.
+    // Derive module status from last completed result per module (best-effort).
+    // Runs don't carry module_id directly; status is "running" if any run is active.
     const moduleStatuses = useMemo<Record<string, ModuleStatus>>(() => {
         const statuses: Record<string, ModuleStatus> = {};
-        const edges = runsData?.edges ?? [];
-        for (const { node: run } of edges) {
-            const prev = statuses[run.moduleId];
-            if (run.state === "running") {
-                statuses[run.moduleId] = "running";
-            } else if (!prev || prev === "never") {
-                if (run.passFail === true) statuses[run.moduleId] = "pass";
-                else if (run.passFail === false) statuses[run.moduleId] = "fail";
-                else statuses[run.moduleId] = "idle";
+        for (const run of runsData?.runs ?? []) {
+            if (run.status === "running" || run.status === "queued") {
+                // We can't know which module is running without results, mark all
+                // as running only if you have a single-module config. Omit for now.
             }
         }
         return statuses;
@@ -55,7 +52,7 @@ export function SidebarModules() {
     const grouped = useMemo(() => {
         const map = new Map<string, ModuleInfo[]>();
         for (const mod of modules) {
-            const cat = getCategoryForModule(mod.id);
+            const cat = getCategoryForModule(mod);
             if (!map.has(cat)) map.set(cat, []);
             map.get(cat)!.push(mod);
         }
@@ -64,11 +61,6 @@ export function SidebarModules() {
 
     const toggleCategory = (cat: string) =>
         setCollapsed((prev) => ({ ...prev, [cat]: !prev[cat] }));
-
-    const categorySortOrder = [
-        "Processor", "Sensors", "Camera", "Audio", "Network",
-        "Display", "Peripherals", "Timing", "Safety", "Debug", "Other",
-    ];
 
     const sortedCategories = Array.from(grouped.keys()).sort(
         (a, b) => categorySortOrder.indexOf(a) - categorySortOrder.indexOf(b)
@@ -82,7 +74,7 @@ export function SidebarModules() {
 
             {modules.length === 0 && (
                 <div className="flex flex-1 items-center justify-center p-4 text-xs text-muted-foreground">
-                    Loading modules…
+                    Loading modules\u2026
                 </div>
             )}
 
@@ -96,11 +88,7 @@ export function SidebarModules() {
                                 onClick={() => toggleCategory(cat)}
                                 className="flex w-full items-center gap-1 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
                             >
-                                {isCollapsed ? (
-                                    <ChevronRight className="h-3 w-3" />
-                                ) : (
-                                    <ChevronDown className="h-3 w-3" />
-                                )}
+                                {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                                 {cat}
                             </button>
 

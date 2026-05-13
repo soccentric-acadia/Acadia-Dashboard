@@ -2,140 +2,104 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { useClient, useRuns } from "@/lib/api/queries";
-import { useEnableModule } from "@/lib/api/queries";
+import { useBoard } from "@/lib/board/context";
+import { useRuns } from "@/lib/api/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { AlertCircle, ArrowLeft } from "lucide-react";
-import { formatRelativeTime, getModuleLabel } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { getModuleRegistry } from "@/lib/proto/registry";
-import { toast } from "sonner";
+import { RunStateBadge } from "@/components/runs/run-state-badge";
+import { ArrowLeft } from "lucide-react";
+import { formatRelativeTime } from "@/lib/utils";
 
-function formatRelativePlaceholder(s: string) { return formatRelativeTime(s); }
-
+// In the single-board model, /targets/[id] redirects to the board detail view.
+// The targetId param is ignored — there is exactly one board.
 export default function TargetDetailPage({ params }: { params: Promise<{ targetId: string }> }) {
-    const { targetId } = use(params);
-    const { data: client, isLoading, isError, error, refetch } = useClient(targetId);
-    const { data: runs } = useRuns({ clientId: targetId, limit: 10 });
-    const { data: modules } = useQuery({
-        queryKey: ["modules"],
-        queryFn: getModuleRegistry,
-        staleTime: Infinity,
-    });
-    const enableModule = useEnableModule();
+    use(params); // consume params — ignored in single-board model
+    const { board, isLoading } = useBoard();
+    const { data: runsData } = useRuns({ limit: 10 });
+    const runs = runsData?.runs ?? [];
 
-    if (isLoading) return (
-        <div className="space-y-4">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-64 w-full" />
-        </div>
-    );
+    if (isLoading) {
+        return (
+            <div className="space-y-4">
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-40 w-full" />
+            </div>
+        );
+    }
 
-    if (isError || !client) return (
-        <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <span>{(error as Error)?.message ?? "Target not found"}</span>
-            <Button size="sm" variant="destructive" className="ml-auto" onClick={() => refetch()}>Retry</Button>
-        </div>
-    );
+    if (!board) {
+        return (
+            <div className="space-y-4">
+                <Link href="/targets" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                    <ArrowLeft className="h-4 w-4" /> Back to Targets
+                </Link>
+                <p className="text-muted-foreground">No board registered.</p>
+            </div>
+        );
+    }
+
+    const fields = [
+        { label: "Board ID",        value: <span className="font-mono text-xs">{board.id}</span> },
+        { label: "Hostname",        value: board.hostname },
+        { label: "Model",           value: board.model ?? "\u2014" },
+        { label: "HAL Version",     value: board.hal_version ?? "\u2014" },
+        { label: "Client Version",  value: board.client_version ?? "\u2014" },
+        { label: "OS Version",      value: board.os_version ?? "\u2014" },
+        { label: "First Seen",      value: board.first_seen ? formatRelativeTime(board.first_seen) : "\u2014" },
+        { label: "Last Seen",       value: board.last_seen  ? formatRelativeTime(board.last_seen)  : "Now" },
+    ];
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" size="sm" asChild>
-                    <Link href="/targets"><ArrowLeft className="mr-2 h-4 w-4" /> Targets</Link>
-                </Button>
-                <h1 className="text-2xl font-bold">{client.hostname ?? client.clientId.slice(0, 16)}</h1>
-                <Badge variant={client.isConnected ? "success" : "secondary"}>
-                    {client.isConnected ? "Online" : "Offline"}
+            <div className="flex items-center gap-3">
+                <Link href="/targets" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                    <ArrowLeft className="h-4 w-4" /> Back to Targets
+                </Link>
+            </div>
+
+            <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold">{board.name || board.hostname}</h1>
+                <Badge variant={board.status === "online" ? "default" : "secondary"} className="capitalize">
+                    {board.status}
                 </Badge>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {[
-                    { label: "Client ID", value: <span className="font-mono text-xs">{client.clientId}</span> },
-                    { label: "HAL Version", value: client.halVersion ?? "—" },
-                    { label: "Client Version", value: client.clientVersion ?? "—" },
-                    { label: "Last Seen", value: client.isConnected ? "Now" : formatRelativePlaceholder(client.lastSeen) },
-                ].map(({ label, value }) => (
-                    <Card key={label}>
-                        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">{label}</CardTitle></CardHeader>
-                        <CardContent><div className="text-sm font-medium">{value}</div></CardContent>
-                    </Card>
-                ))}
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
-                {/* Module inventory */}
-                <Card>
-                    <CardHeader><CardTitle>Module Settings</CardTitle></CardHeader>
-                    <CardContent>
-                        {!modules ? (
-                            <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
-                        ) : (
-                            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                                {modules.map((m) => (
-                                    <div key={m.id} className="flex items-center justify-between rounded-md border px-3 py-2">
-                                        <Label htmlFor={`mod-${m.id}`} className="cursor-pointer">
-                                            {getModuleLabel(m.id)}
-                                            {m.status === "deprecated" && (
-                                                <Badge variant="secondary" className="ml-2 text-xs">deprecated</Badge>
-                                            )}
-                                        </Label>
-                                        <Switch
-                                            id={`mod-${m.id}`}
-                                            defaultChecked
-                                            onCheckedChange={(enabled) => {
-                                                enableModule.mutate(
-                                                    { clientId: client.clientId, moduleId: m.id, enabled },
-                                                    {
-                                                        onSuccess: () => toast.success(`${getModuleLabel(m.id)} ${enabled ? "enabled" : "disabled"}`),
-                                                        onError: (e) => toast.error(`Failed: ${(e as Error).message}`),
-                                                    }
-                                                );
-                                            }}
-                                        />
-                                    </div>
-                                ))}
+            <Card>
+                <CardHeader><CardTitle className="text-base">Board Details</CardTitle></CardHeader>
+                <CardContent>
+                    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                        {fields.map(({ label, value }) => (
+                            <div key={label}>
+                                <dt className="text-xs text-muted-foreground">{label}</dt>
+                                <dd className="font-medium mt-0.5">{value}</dd>
                             </div>
-                        )}
-                    </CardContent>
-                </Card>
+                        ))}
+                    </dl>
+                </CardContent>
+            </Card>
 
-                {/* Recent runs */}
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle>Recent Runs</CardTitle>
-                        <Button variant="ghost" size="sm" asChild>
-                            <Link href={`/runs?clientId=${client.clientId}`}>View all</Link>
-                        </Button>
-                    </CardHeader>
-                    <CardContent>
-                        {!runs?.edges.length ? (
-                            <p className="py-4 text-center text-sm text-muted-foreground">No runs for this target yet.</p>
-                        ) : (
-                            <div className="space-y-1">
-                                {runs.edges.map(({ node }) => (
-                                    <Link key={node.runId} href={`/runs/${node.runId}`}
-                                        className="flex items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-accent">
-                                        <span>{node.moduleId}</span>
-                                        <div className="flex items-center gap-2">
-                                            <Badge variant="outline" className="capitalize">{node.state}</Badge>
-                                            <span className="text-xs text-muted-foreground">{formatRelativePlaceholder(node.createdAt)}</span>
-                                        </div>
-                                    </Link>
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">Recent Runs</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {runs.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No runs found.</p>
+                    ) : (
+                        <div className="space-y-1 divide-y">
+                            {runs.map((run) => (
+                                <Link key={run.id} href={`/runs/${run.id}`} className="flex items-center justify-between py-2 hover:bg-accent/50 rounded px-2 transition-colors">
+                                    <span className="font-mono text-xs text-muted-foreground">{run.id.slice(0, 12)}\u2026</span>
+                                    <span className="text-sm truncate mx-2">{run.name}</span>
+                                    <RunStateBadge state={run.status} />
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                    <Link href="/runs" className="text-xs text-primary hover:underline mt-3 block">View all runs</Link>
+                </CardContent>
+            </Card>
         </div>
     );
 }
