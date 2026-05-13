@@ -6,11 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, FileText, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useRuns } from "@/lib/api/queries";
-import { useBoard } from "@/lib/board/context";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 
 export default function ReportsPage() {
-    const { board } = useBoard();
     const { data: runsData } = useRuns({ limit: 20 });
     const runs = runsData?.runs ?? [];
 

@@ -8,47 +8,41 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Server, Play, CheckCircle2, AlertCircle, Activity, ChevronRight, BarChart3, WifiOff, Zap, Clock, XCircle, TrendingDown } from "lucide-react";
+import { Server, Play, CheckCircle2, Activity, ChevronRight, XCircle } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Run } from "@/lib/api/types";
-import { ResponsiveContainer, LineChart, Line } from "recharts";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
-
-// Mock sparkline data for failure trend
-const sparklineDataFail = [
-    { value: 5 }, { value: 8 }, { value: 3 }, { value: 2 }, { value: 6 }, { value: 4 }, { value: 1 },
-];
 
 function HealthBadge() {
     const { isLoading, isError } = useHealth();
     if (isLoading) return <Badge variant="outline" className="bg-background/50">Checking Server\u2026</Badge>;
-    if (isError)   return <Badge variant="destructive">Server unreachable</Badge>;
+    if (isError) return <Badge variant="destructive">Server unreachable</Badge>;
     return <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Server reachable</Badge>;
 }
 
 function calculateDuration(start: string | null, end: string | null) {
     if (!start) return "-";
     const startTime = new Date(start).getTime();
-    const endTime   = end ? new Date(end).getTime() : Date.now();
-    const diffMs    = endTime - startTime;
-    const seconds   = Math.floor((diffMs / 1000) % 60);
-    const minutes   = Math.floor((diffMs / (1000 * 60)) % 60);
-    const hours     = Math.floor(diffMs / (1000 * 60 * 60));
-    if (hours   > 0) return `${hours}h ${minutes}m`;
+    const endTime = end ? new Date(end).getTime() : Date.now();
+    const diffMs = endTime - startTime;
+    const seconds = Math.floor((diffMs / 1000) % 60);
+    const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (hours > 0) return `${hours}h ${minutes}m`;
     if (minutes > 0) return `${minutes}m ${seconds}s`;
     return `${seconds}s`;
 }
 
 export default function DashboardPage() {
     const { board } = useBoard();
-    const { data: recentRunsData,  isLoading: recentLoading  } = useRuns({ limit: 10 });
-    const { data: failedRunsData,  isLoading: failedLoading  } = useRuns({ status: "failed",    limit: 5 });
-    const { data: successRunsData, isLoading: successLoading } = useRuns({ status: "completed",  limit: 1 });
-    const { data: activeRunsData                              } = useRuns({ status: "running",    limit: 5 });
+    const { data: recentRunsData, isLoading: recentLoading } = useRuns({ limit: 10 });
+    const { data: failedRunsData, isLoading: failedLoading } = useRuns({ status: "failed", limit: 5 });
+    const { data: successRunsData, isLoading: successLoading } = useRuns({ status: "completed", limit: 1 });
+    const { data: activeRunsData } = useRuns({ status: "running", limit: 5 });
 
-    const recentRuns  = recentRunsData?.runs  ?? [];
-    const failedRuns  = failedRunsData?.runs  ?? [];
-    const activeRuns  = activeRunsData?.runs  ?? [];
+    const recentRuns = recentRunsData?.runs ?? [];
+    const failedRuns = failedRunsData?.runs ?? [];
+    const activeRuns = activeRunsData?.runs ?? [];
     const lastSuccess = successRunsData?.runs?.[0] ?? null;
 
     return (

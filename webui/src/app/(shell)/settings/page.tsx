@@ -6,17 +6,17 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
     Bell, Database, Monitor, Wifi, Wrench, User, Cpu,
-    Plus, Trash2, Key, Eye, EyeOff, Server,
+    Plus, Server,
 } from "lucide-react";
 import { useBoard } from "@/lib/board/context";
 import { getSessionUser } from "@/lib/auth/session";
-import { useListApiTokens, useCreateApiToken, useRevokeApiToken } from "@/lib/api/queries";
+
 import { toast } from "sonner";
 
 // ── Board Tab ──────────────────────────────────────────────────────────────
@@ -143,10 +143,10 @@ function AccountTab() {
 function VersionsTab() {
     const { board } = useBoard();
     const items = [
-        { label: "HAL",     value: board?.hal_version    ?? "\u2014" },
-        { label: "Client",  value: board?.client_version ?? "\u2014" },
-        { label: "OS",      value: board?.os_version     ?? "\u2014" },
-        { label: "Web UI",  value: process.env.NEXT_PUBLIC_VERSION ?? "dev" },
+        { label: "HAL", value: board?.hal_version ?? "\u2014" },
+        { label: "Client", value: board?.client_version ?? "\u2014" },
+        { label: "OS", value: board?.os_version ?? "\u2014" },
+        { label: "Web UI", value: process.env.NEXT_PUBLIC_VERSION ?? "dev" },
     ];
     return (
         <div className="space-y-3">
@@ -197,14 +197,14 @@ function StubTab({ label }: { label: string }) {
 // ── Settings page ──────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: "board",         label: "Board",         icon: Server },
-    { id: "versions",      label: "Versions",       icon: Cpu },
-    { id: "account",       label: "Account",        icon: User },
-    { id: "network",       label: "Network",        icon: Wifi },
-    { id: "notifications", label: "Notifications",  icon: Bell },
-    { id: "data",          label: "Data",           icon: Database },
-    { id: "display",       label: "Display",        icon: Monitor },
-    { id: "advanced",      label: "Advanced",       icon: Wrench },
+    { id: "board", label: "Board", icon: Server },
+    { id: "versions", label: "Versions", icon: Cpu },
+    { id: "account", label: "Account", icon: User },
+    { id: "network", label: "Network", icon: Wifi },
+    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "data", label: "Data", icon: Database },
+    { id: "display", label: "Display", icon: Monitor },
+    { id: "advanced", label: "Advanced", icon: Wrench },
 ];
 
 function SettingsContent() {

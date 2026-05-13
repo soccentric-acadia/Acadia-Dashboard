@@ -1,6 +1,6 @@
 "use client";
 
-import React, { use, useState, useEffect, useRef } from "react";
+import React, { use, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRun, useCancelRun, usePauseRun, useResumeRun, useRunResults, useRunLogs } from "@/lib/api/queries";
 import { getModuleLabel, formatRelativeTime, formatDuration } from "@/lib/utils";
@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { ArrowLeft, Square, PauseCircle, PlayCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import type { Run, Result, LogEntry, RunStatus } from "@/lib/api/types";
+import type { Result, LogEntry, RunStatus } from "@/lib/api/types";
 
 const ACTIVE_STATUSES = new Set<RunStatus>(["queued", "running", "paused"]);
 
@@ -20,7 +20,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     const { runId } = use(params);
     const { data: run, isLoading, error } = useRun(runId);
     const cancelRun = useCancelRun();
-    const pauseRun  = usePauseRun();
+    const pauseRun = usePauseRun();
     const resumeRun = useResumeRun();
     const { data: resultsPage } = useRunResults(runId);
     const { data: logs } = useRunLogs(runId);
@@ -115,8 +115,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
             {/* Stat cards */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard label="Mode"    value={run.mode} />
-                <StatCard label="Status"  value={run.status} />
+                <StatCard label="Mode" value={run.mode} />
+                <StatCard label="Status" value={run.status} />
                 <StatCard label="Started" value={run.started_at ? formatRelativeTime(run.started_at) : "\u2014"} />
                 <StatCard
                     label="Duration"
@@ -217,8 +217,8 @@ function ResultsPanel({ results, isActive }: { results: Result[]; isActive: bool
 function LogsPanel({ logs, logsEndRef }: { logs: LogEntry[]; logsEndRef: React.RefObject<HTMLDivElement | null> }) {
     const SEVERITY_COLORS: Record<string, string> = {
         ERROR: "text-red-400",
-        WARN:  "text-yellow-400",
-        INFO:  "text-blue-400",
+        WARN: "text-yellow-400",
+        INFO: "text-blue-400",
         DEBUG: "text-muted-foreground",
     };
 

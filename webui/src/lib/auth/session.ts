@@ -1,7 +1,7 @@
 // Session management backed by the Acadia Server.
 // Login/logout call the real REST API and rely on server-issued session cookies.
 
-import { authLogin, authLogout, ApiError } from "@/lib/api/client";
+import { authLogin, authLogout } from "@/lib/api/client";
 
 export interface SessionUser {
     user_id: string;

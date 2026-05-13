@@ -30,13 +30,10 @@ import {
     markAllNotificationsRead,
     type RunsFilter,
     type LogFilter,
-    type ModuleInfo,
 } from "./client";
 import type {
-    Board,
     Run,
     RunStatus,
-    TestConfig,
     CreateRunInput,
     CreateConfigInput,
 } from "./types";
@@ -324,7 +321,7 @@ export function useMarkAllNotificationsRead() {
 
 // ── API Tokens ────────────────────────────────────────────────────────────────
 
-import { listApiTokens, revokeApiToken, type ApiToken } from "./client";
+import { listApiTokens, revokeApiToken } from "./client";
 
 export function useListApiTokens() {
     return useQuery({

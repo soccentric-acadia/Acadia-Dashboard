@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+
 import { useRouter } from "next/navigation";
 import { useBoard } from "@/lib/board/context";
 import { useCreateConfig, useCreateRun } from "@/lib/api/queries";
@@ -24,15 +24,15 @@ export function RunLauncher({ open, onOpenChange, defaultConfig }: RunLauncherPr
     const router = useRouter();
     const { board } = useBoard();
     const createConfig = useCreateConfig();
-    const createRun    = useCreateRun();
+    const createRun = useCreateRun();
 
     const handleLaunch = async () => {
         if (!defaultConfig) return;
         try {
             // 1. Create (or re-use) a TestConfig on the Server
             const modules: ModuleConfig[] = [{
-                id:             defaultConfig.moduleId,
-                enabled:        true,
+                id: defaultConfig.moduleId,
+                enabled: true,
                 config_payload: {
                     common: defaultConfig.commonConfig,
                     module: defaultConfig.moduleConfig,
@@ -40,16 +40,16 @@ export function RunLauncher({ open, onOpenChange, defaultConfig }: RunLauncherPr
                 notes: "",
             }];
             const config = await createConfig.mutateAsync({
-                name:          defaultConfig.name,
-                mode:          defaultConfig.mode as TestMode,
+                name: defaultConfig.name,
+                mode: defaultConfig.mode as TestMode,
                 modules,
                 common_config: defaultConfig.commonConfig as Record<string, unknown>,
             });
             // 2. Start the run against that config
             const run = await createRun.mutateAsync({
                 config_id: config.id,
-                mode:      config.mode,
-                name:      defaultConfig.name,
+                mode: config.mode,
+                name: defaultConfig.name,
             });
             toast.success("Run started");
             onOpenChange(false);
