@@ -1,76 +1,41 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import type { Client } from "@/lib/api/types";
-import { fetchClients } from "@/lib/api/client";
+import type { Board } from "@/lib/api/types";
+import { fetchBoard } from "@/lib/api/client";
 
 interface BoardContextValue {
-    board: Client | null;
-    boardId: string | null;          // persisted selected clientId
-    setBoard: (client: Client) => void;
-    clearBoard: () => void;
+    board: Board | null;
     isLoading: boolean;
+    refresh: () => void;
 }
 
 const BoardContext = createContext<BoardContextValue>({
     board: null,
-    boardId: null,
-    setBoard: () => { },
-    clearBoard: () => { },
     isLoading: false,
+    refresh: () => {},
 });
 
-const BOARD_KEY = "acadia_board_id";
-
 export function BoardProvider({ children }: { children: React.ReactNode }) {
-    const [board, setBoard_] = useState<Client | null>(null);
-    const [boardId, setBoardId] = useState<string | null>(null);
+    const [board, setBoard] = useState<Board | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Load persisted board ID and fetch its data on mount.
-    useEffect(() => {
-        const stored = localStorage.getItem(BOARD_KEY);
-        if (!stored) { setIsLoading(false); return; }
-        setBoardId(stored);
-
-        fetchClients()
-            .then((clients) => {
-                const match = clients.find((c) => c.clientId === stored);
-                if (match) setBoard_(match);
-            })
-            .catch(() => { /* server offline */ })
+    const load = useCallback(() => {
+        fetchBoard()
+            .then((b) => setBoard(b))
+            .catch(() => { /* server offline — keep stale data */ })
             .finally(() => setIsLoading(false));
     }, []);
 
-    // Poll board status every 10 s to keep online indicator live.
     useEffect(() => {
-        if (!boardId) return;
-        const id = setInterval(async () => {
-            try {
-                const clients = await fetchClients();
-                const match = clients.find((c) => c.clientId === boardId);
-                if (match) setBoard_(match);
-            } catch {
-                // keep stale data
-            }
-        }, 10_000);
+        load();
+        // Poll every 15 s to keep status fresh.
+        const id = setInterval(load, 15_000);
         return () => clearInterval(id);
-    }, [boardId]);
-
-    const setBoard = useCallback((client: Client) => {
-        setBoard_(client);
-        setBoardId(client.clientId);
-        localStorage.setItem(BOARD_KEY, client.clientId);
-    }, []);
-
-    const clearBoard = useCallback(() => {
-        setBoard_(null);
-        setBoardId(null);
-        localStorage.removeItem(BOARD_KEY);
-    }, []);
+    }, [load]);
 
     return (
-        <BoardContext.Provider value={{ board, boardId, setBoard, clearBoard, isLoading }}>
+        <BoardContext.Provider value={{ board, isLoading, refresh: load }}>
             {children}
         </BoardContext.Provider>
     );

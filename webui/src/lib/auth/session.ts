@@ -1,89 +1,63 @@
-// Client-side auth session for single-user local account.
-// Credentials are stored hashed in localStorage; the server doesn't gate on them
-// (the actual server uses API keys for headless clients, not user sessions).
+// Session management backed by the Acadia Server.
+// Login/logout call the real REST API and rely on server-issued session cookies.
 
-const SESSION_KEY = "acadia_session";
-const CREDS_KEY = "acadia_creds";
+import { authLogin, authLogout, ApiError } from "@/lib/api/client";
 
-export interface Session {
+export interface SessionUser {
+    user_id: string;
     username: string;
-    loginAt: string;
 }
 
-// Simple non-crypto hash for localStorage-stored password (UI-only gate).
-async function hashPassword(password: string): Promise<string> {
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
-    return Array.from(new Uint8Array(buf))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
+const SESSION_KEY = "acadia_session_user";
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Attempt login against the Server.
+ * On success the server sets a session cookie and we cache the user info in
+ * sessionStorage for quick UI reads (no password ever stored).
+ * Throws ApiError on invalid credentials or server errors.
+ */
+export async function login(username: string, password: string): Promise<void> {
+    const user = await authLogin(username, password);
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
 }
 
-export function getSession(): Session | null {
-    if (typeof window === "undefined") return null;
+/**
+ * Call the Server logout endpoint and clear local session info.
+ * Safe to call even when not logged in.
+ */
+export async function logout(): Promise<void> {
     try {
-        const raw = localStorage.getItem(SESSION_KEY);
-        return raw ? (JSON.parse(raw) as Session) : null;
+        await authLogout();
+    } catch {
+        // Best-effort — clear local state regardless.
+    } finally {
+        sessionStorage.removeItem(SESSION_KEY);
+    }
+}
+
+/**
+ * Return the cached session user, or null if not logged in.
+ * Does NOT make a network request.
+ */
+export function getSessionUser(): SessionUser | null {
+    if (typeof window === "undefined") return null;
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    try {
+        return JSON.parse(raw) as SessionUser;
     } catch {
         return null;
     }
 }
 
-export function clearSession(): void {
-    if (typeof window !== "undefined") {
-        localStorage.removeItem(SESSION_KEY);
-    }
-}
-
-interface StoredCreds {
-    username: string;
-    passwordHash: string;
-}
-
-function getStoredCreds(): StoredCreds {
-    if (typeof window === "undefined") return { username: "admin", passwordHash: "" };
-    try {
-        const raw = localStorage.getItem(CREDS_KEY);
-        if (raw) return JSON.parse(raw) as StoredCreds;
-    } catch {
-        // fall through
-    }
-    // Default credentials on first boot — user should change these.
-    return { username: "admin", passwordHash: "" };
-}
-
-export async function login(username: string, password: string): Promise<boolean> {
-    const stored = getStoredCreds();
-
-    // If no password has ever been set (first boot), accept any password for "admin".
-    const isFirstBoot = stored.passwordHash === "";
-    const passwordOk =
-        isFirstBoot ||
-        (await hashPassword(password)) === stored.passwordHash;
-
-    if (username !== stored.username || !passwordOk) return false;
-
-    // On first boot, save the supplied password as the new password.
-    if (isFirstBoot) {
-        await saveCredentials(username, password);
-    }
-
-    const session: Session = { username, loginAt: new Date().toISOString() };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    return true;
-}
-
-export async function saveCredentials(username: string, newPassword: string): Promise<void> {
-    const creds: StoredCreds = {
-        username,
-        passwordHash: await hashPassword(newPassword),
-    };
-    localStorage.setItem(CREDS_KEY, JSON.stringify(creds));
-    // Update the session username too.
-    const session = getSession();
-    if (session) {
-        localStorage.setItem(
-            SESSION_KEY,
-            JSON.stringify({ ...session, username })
-        );
-    }
+/**
+ * True if a session user entry exists in sessionStorage.
+ * Does not verify the session cookie with the server.
+ */
+export function isAuthenticated(): boolean {
+    return getSessionUser() !== null;
 }

@@ -2,8 +2,7 @@
 
 import React, { use, useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRun, useStopRun } from "@/lib/api/queries";
-import { getWSClient } from "@/lib/api/ws";
+import { useRun, useCancelRun, usePauseRun, useResumeRun, useRunResults, useRunLogs } from "@/lib/api/queries";
 import { getModuleLabel, formatRelativeTime, formatDuration } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,66 +10,56 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
-import { ArrowLeft, Square, AlertCircle } from "lucide-react";
+import { ArrowLeft, Square, PauseCircle, PlayCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import type { Run } from "@/lib/api/types";
-import type { WSRunUpdate, WSLogLine } from "@/lib/api/ws";
+import type { Run, Result, LogEntry, RunStatus } from "@/lib/api/types";
 
-const TERMINAL_RUNNING_STATES = new Set(["starting", "running", "paused", "stopping"]);
+const ACTIVE_STATUSES = new Set<RunStatus>(["queued", "running", "paused"]);
 
 export default function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
     const { runId } = use(params);
     const { data: run, isLoading, error } = useRun(runId);
-    const stopRun = useStopRun();
+    const cancelRun = useCancelRun();
+    const pauseRun  = usePauseRun();
+    const resumeRun = useResumeRun();
+    const { data: resultsPage } = useRunResults(runId);
+    const { data: logs } = useRunLogs(runId);
 
-    const [liveState, setLiveState] = useState<Partial<Run> | null>(null);
-    const [logs, setLogs] = useState<WSLogLine[]>([]);
     const logsEndRef = useRef<HTMLDivElement | null>(null);
 
-    const isLive = TERMINAL_RUNNING_STATES.has(liveState?.state ?? run?.state ?? "");
-
-    // WebSocket subscription
-    useEffect(() => {
-        if (!runId) return;
-        const ws = getWSClient();
-
-        const handleUpdate = (update: WSRunUpdate) => {
-            if (update.runId === runId) {
-                setLiveState((prev) => ({ ...prev, ...(update as unknown as Partial<Run>) }));
-            }
-        };
-        const handleLog = (log: WSLogLine) => {
-            if (log.runId === runId) {
-                setLogs((prev) => [...prev.slice(-2000), log]); // keep last 2000 lines
-            }
-        };
-
-        ws.on("run_update", handleUpdate);
-        ws.on("log_line", handleLog);
-        ws.subscribe(runId);
-
-        return () => {
-            ws.off("run_update", handleUpdate);
-            ws.off("log_line", handleLog);
-            ws.unsubscribe(runId);
-        };
-    }, [runId]);
+    const isActive = ACTIVE_STATUSES.has(run?.status as RunStatus);
 
     // Auto-scroll logs
     useEffect(() => {
         logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [logs]);
 
-    const handleStop = async () => {
+    const handleCancel = async () => {
         try {
-            await stopRun.mutateAsync(runId);
-            toast.success("Run stop requested");
+            await cancelRun.mutateAsync(runId);
+            toast.success("Run cancelled");
         } catch (err) {
-            toast.error(`Stop failed: ${(err as Error).message}`);
+            toast.error(`Cancel failed: ${(err as Error).message}`);
         }
     };
 
-    const displayRun = { ...run, ...liveState } as Run | null;
+    const handlePause = async () => {
+        try {
+            await pauseRun.mutateAsync(runId);
+            toast.success("Run paused");
+        } catch (err) {
+            toast.error(`Pause failed: ${(err as Error).message}`);
+        }
+    };
+
+    const handleResume = async () => {
+        try {
+            await resumeRun.mutateAsync(runId);
+            toast.success("Run resumed");
+        } catch (err) {
+            toast.error(`Resume failed: ${(err as Error).message}`);
+        }
+    };
 
     if (isLoading) return (
         <div className="space-y-4">
@@ -80,7 +69,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         </div>
     );
 
-    if (error || !displayRun) return (
+    if (error || !run) return (
         <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-destructive">
             <AlertCircle className="h-4 w-4" />
             <span>Failed to load run: {(error as Error)?.message ?? "Not found"}</span>
@@ -94,46 +83,52 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 <Button variant="ghost" size="sm" asChild>
                     <Link href="/runs"><ArrowLeft className="mr-2 h-4 w-4" />Runs</Link>
                 </Button>
-                <h1 className="text-xl font-bold font-mono">{runId.slice(0, 20)}…</h1>
-                <RunStateBadge state={displayRun.state} />
-                {isLive && (
+                <h1 className="text-xl font-bold font-mono">
+                    {run.name || runId.slice(0, 20) + "\u2026"}
+                </h1>
+                <RunStateBadge state={run.status} />
+                {isActive && (
                     <Badge variant="outline" className="animate-pulse text-xs text-green-500 border-green-500">
-                        ● live
+                        \u25cf live
                     </Badge>
                 )}
             </div>
 
             {/* Controls */}
-            {isLive && (
+            {isActive && (
                 <div className="flex gap-2">
-                    <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleStop}
-                        disabled={stopRun.isPending}
-                    >
-                        <Square className="mr-2 h-4 w-4" />
-                        Stop run
+                    {run.status === "running" && (
+                        <Button variant="outline" size="sm" onClick={handlePause} disabled={pauseRun.isPending}>
+                            <PauseCircle className="mr-2 h-4 w-4" />Pause
+                        </Button>
+                    )}
+                    {run.status === "paused" && (
+                        <Button variant="outline" size="sm" onClick={handleResume} disabled={resumeRun.isPending}>
+                            <PlayCircle className="mr-2 h-4 w-4" />Resume
+                        </Button>
+                    )}
+                    <Button variant="destructive" size="sm" onClick={handleCancel} disabled={cancelRun.isPending}>
+                        <Square className="mr-2 h-4 w-4" />Cancel
                     </Button>
                 </div>
             )}
 
             {/* Stat cards */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard label="Module" value={getModuleLabel(displayRun.moduleId)} />
-                <StatCard label="Target" value={displayRun.client?.hostname ?? displayRun.client?.clientId?.slice(0, 16) ?? "—"} />
-                <StatCard label="Started" value={displayRun.startedAt ? formatRelativeTime(displayRun.startedAt) : "—"} />
+                <StatCard label="Mode"    value={run.mode} />
+                <StatCard label="Status"  value={run.status} />
+                <StatCard label="Started" value={run.started_at ? formatRelativeTime(run.started_at) : "\u2014"} />
                 <StatCard
                     label="Duration"
                     value={
-                        displayRun.startedAt
+                        run.started_at
                             ? formatDuration(
-                                (displayRun.completedAt
-                                    ? new Date(displayRun.completedAt)
+                                (run.ended_at
+                                    ? new Date(run.ended_at)
                                     : new Date()
-                                ).getTime() - new Date(displayRun.startedAt).getTime()
+                                ).getTime() - new Date(run.started_at).getTime()
                             )
-                            : "—"
+                            : "\u2014"
                     }
                 />
             </div>
@@ -141,24 +136,24 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
             {/* Main tabs */}
             <Tabs defaultValue="results">
                 <TabsList>
-                    <TabsTrigger value="results">Results</TabsTrigger>
-                    <TabsTrigger value="logs">Logs{logs.length > 0 ? ` (${logs.length})` : ""}</TabsTrigger>
+                    <TabsTrigger value="results">Results ({resultsPage?.total ?? 0})</TabsTrigger>
+                    <TabsTrigger value="logs">Logs</TabsTrigger>
                     <TabsTrigger value="config">Config</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="results" className="mt-4">
-                    <ResultsPanel run={displayRun} />
+                    <ResultsPanel results={resultsPage?.results ?? []} isActive={isActive} />
                 </TabsContent>
 
                 <TabsContent value="logs" className="mt-4">
-                    <LogsPanel logs={logs} logsEndRef={logsEndRef} />
+                    <LogsPanel logs={logs ?? []} logsEndRef={logsEndRef} />
                 </TabsContent>
 
                 <TabsContent value="config" className="mt-4">
                     <Card>
                         <CardContent className="pt-4">
                             <pre className="text-xs font-mono overflow-x-auto whitespace-pre-wrap bg-muted rounded p-3">
-                                {JSON.stringify(displayRun.config ?? {}, null, 2)}
+                                {JSON.stringify(run, null, 2)}
                             </pre>
                         </CardContent>
                     </Card>
@@ -175,35 +170,42 @@ function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
                 <CardTitle className="text-xs text-muted-foreground">{label}</CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="text-sm font-medium">{value}</div>
+                <div className="text-sm font-medium capitalize">{value}</div>
             </CardContent>
         </Card>
     );
 }
 
-function ResultsPanel({ run }: { run: Run }) {
-    const batches = run.resultBatches?.edges ?? [];
-    if (!batches.length) return (
+function ResultsPanel({ results, isActive }: { results: Result[]; isActive: boolean }) {
+    if (!results.length) return (
         <Card>
             <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                {TERMINAL_RUNNING_STATES.has(run.state) ? "Waiting for results…" : "No results recorded."}
+                {isActive ? "Waiting for results\u2026" : "No results recorded."}
             </CardContent>
         </Card>
     );
 
     return (
         <div className="space-y-3">
-            {batches.map(({ node }) => (
-                <Card key={node.batchId}>
+            {results.map((r) => (
+                <Card key={r.id}>
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-mono">{node.batchId.slice(0, 12)}</CardTitle>
-                            <span className="text-xs text-muted-foreground">{formatRelativeTime(node.createdAt)}</span>
+                            <CardTitle className="text-sm">
+                                {getModuleLabel(r.module_id)}
+                                <span className="ml-2 text-xs text-muted-foreground font-mono">{r.id.slice(0, 12)}</span>
+                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                                <Badge variant={r.status === "pass" ? "success" : r.status === "fail" ? "destructive" : "secondary"} className="text-xs capitalize">
+                                    {r.status}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">{formatRelativeTime(r.timestamp)}</span>
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent>
                         <pre className="text-xs font-mono overflow-x-auto whitespace-pre-wrap bg-muted rounded p-3">
-                            {JSON.stringify(node.payload ?? {}, null, 2)}
+                            {JSON.stringify(r.payload ?? {}, null, 2)}
                         </pre>
                     </CardContent>
                 </Card>
@@ -212,24 +214,18 @@ function ResultsPanel({ run }: { run: Run }) {
     );
 }
 
-function LogsPanel({
-    logs,
-    logsEndRef,
-}: {
-    logs: WSLogLine[];
-    logsEndRef: React.RefObject<HTMLDivElement | null>;
-}) {
-    const LEVEL_COLORS: Record<string, string> = {
+function LogsPanel({ logs, logsEndRef }: { logs: LogEntry[]; logsEndRef: React.RefObject<HTMLDivElement | null> }) {
+    const SEVERITY_COLORS: Record<string, string> = {
         ERROR: "text-red-400",
-        WARN: "text-yellow-400",
-        INFO: "text-blue-400",
+        WARN:  "text-yellow-400",
+        INFO:  "text-blue-400",
         DEBUG: "text-muted-foreground",
     };
 
     if (!logs.length) return (
         <Card>
             <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No log lines received yet.
+                No log entries.
             </CardContent>
         </Card>
     );
@@ -243,11 +239,11 @@ function LogsPanel({
                             <span className="text-muted-foreground shrink-0">
                                 {new Date(log.timestamp).toLocaleTimeString()}
                             </span>
-                            <span className={`shrink-0 w-12 ${LEVEL_COLORS[log.level as string] ?? ""}`}>
-                                {log.level}
+                            <span className={`shrink-0 w-12 ${SEVERITY_COLORS[log.severity?.toUpperCase() ?? ""] ?? ""}`}>
+                                {log.severity}
                             </span>
                             <span className="shrink-0 text-muted-foreground">[{log.source}]</span>
-                            <span className="break-all">{log.message ?? log.text}</span>
+                            <span className="break-all">{log.message}</span>
                         </div>
                     ))}
                     <div ref={logsEndRef as React.RefObject<HTMLDivElement>} />

@@ -3,22 +3,22 @@
 import { useState, useEffect } from "react";
 import { User, LogOut, Key, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getSession, clearSession } from "@/lib/auth/session";
+import { getSessionUser, logout } from "@/lib/auth/session";
 import { useRouter } from "next/navigation";
 
 export function UserMenu() {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen]         = useState(false);
     const [username, setUsername] = useState("admin");
     const router = useRouter();
 
-    // Load session after mount to avoid SSR/hydration mismatch
     useEffect(() => {
-        const s = getSession();
+        const s = getSessionUser();
         if (s?.username) setUsername(s.username);
     }, []);
 
-    const handleLogout = () => {
-        clearSession();
+    const handleLogout = async () => {
+        setOpen(false);
+        await logout();
         router.push("/login");
     };
 

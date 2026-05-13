@@ -1,20 +1,18 @@
 // Client-side module registry.
-// Loaded from /api/modules (which serves the bundled modules.yaml).
+// Modules are sourced from the Acadia Server (GET /api/v1/modules).
+// Local disk access (Next.js /api/modules route) is prohibited per REQ.md §4.
 
-export interface ModuleInfo {
-    id: string;
-    proto_package: string;
-    config_type: string;
-    result_type: string;
-    version: number;
-    status: "active" | "deprecated";
-    source_path: string;
-    /** Derived from module ID; not in YAML */
-    category?: string;
-}
+import { fetchModules, type ModuleInfo } from "@/lib/api/client";
 
-// Maps module id → display category group.
-const CATEGORY_MAP: Record<string, string> = {
+export type { ModuleInfo };
+
+// ---------------------------------------------------------------------------
+// Category helper
+// ---------------------------------------------------------------------------
+
+// Fallback local category map used only when the server does not supply one.
+// Kept intentionally minimal — categories should come from Server as CM-14 fix.
+const FALLBACK_CATEGORY: Record<string, string> = {
     cpu: "Processor",
     gpu: "Processor",
     deep_learning_accelerator: "Processor",
@@ -36,19 +34,31 @@ const CATEGORY_MAP: Record<string, string> = {
     debug_and_development_interfaces: "Debug",
 };
 
-export function getCategoryForModule(moduleId: string): string {
-    return CATEGORY_MAP[moduleId] ?? "Other";
+export function getCategoryForModule(module: ModuleInfo | string): string {
+    if (typeof module === "string") {
+        return FALLBACK_CATEGORY[module] ?? "Other";
+    }
+    return module.category ?? FALLBACK_CATEGORY[module.id] ?? "Other";
 }
+
+// ---------------------------------------------------------------------------
+// Registry — fetched from Server
+// ---------------------------------------------------------------------------
 
 let _registry: ModuleInfo[] | null = null;
 
+/**
+ * Return the module registry from the Server.
+ * Results are cached in-memory for the lifetime of the page.
+ */
 export async function getModuleRegistry(): Promise<ModuleInfo[]> {
     if (_registry) return _registry;
-    const res = await fetch("/api/modules");
-    if (!res.ok) throw new Error("Failed to load module registry");
-    const data = await res.json() as { modules: ModuleInfo[] };
-    _registry = data.modules;
+    _registry = await fetchModules();
     return _registry;
+}
+
+export function clearModuleRegistryCache(): void {
+    _registry = null;
 }
 
 export function getModuleLabel(moduleId: string | undefined | null): string {

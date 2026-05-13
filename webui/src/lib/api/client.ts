@@ -1,224 +1,313 @@
-// Thin GraphQL client wrapping graphql-request.
-// All queries go through this module; no fetch() calls outside this file.
+// Acadia REST API client.
+// All functions use native fetch() + server-side session cookies for auth.
+// No GraphQL — Server exposes REST at /api/v1/*.
 
-import { GraphQLClient, gql } from "graphql-request";
 import type {
-    Client,
+    Board,
     Run,
-    RunState,
-    ConfigureRunInput,
-    ConfigureRunResult,
-    ModuleSetting,
+    Result,
+    LogEntry,
+    TestConfig,
+    OtaUpgrade,
+    Notification,
+    CreateConfigInput,
+    CreateRunInput,
+    PaginatedRuns,
+    PaginatedResults,
 } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8080";
+// ---------------------------------------------------------------------------
+// Base URL + shared helpers
+// ---------------------------------------------------------------------------
 
-export const gqlClient = new GraphQLClient(`${API_BASE}/graphql`, {
-    headers: () => {
-        const key = typeof window !== "undefined" ? localStorage.getItem("acadia_api_key") : null;
-        return key ? ({ "X-API-Key": key } as Record<string, string>) : ({} as Record<string, string>);
-    },
-});
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
-// ── Queries ──────────────────────────────────────────────────────────────────
-
-export const CLIENTS_QUERY = gql`
-  query GetClients {
-    clients {
-      clientId hostname halVersion clientVersion firstSeen lastSeen isConnected
-    }
-  }
-`;
-
-export const CLIENT_QUERY = gql`
-  query GetClient($clientId: ID!) {
-    client(clientId: $clientId) {
-      clientId hostname halVersion clientVersion firstSeen lastSeen isConnected
-      runs(limit: 10) {
-        edges { node { runId moduleId mode state createdAt endedAt batchCount sampleCount } cursor }
-        pageInfo { hasNextPage endCursor }
-      }
-    }
-  }
-`;
-
-export const RUNS_QUERY = gql`
-  query GetRuns($clientId: ID, $moduleId: String, $state: RunState, $limit: Int, $after: String) {
-    runs(clientId: $clientId, moduleId: $moduleId, state: $state, limit: $limit, after: $after) {
-      edges {
-        node {
-          runId moduleId mode state createdAt startedAt endedAt batchCount sampleCount passFail
-          client { clientId hostname }
+/** Builds a URL relative to the API base, appending optional query params. */
+function apiUrl(path: string, params?: Record<string, string | number | boolean | undefined>): string {
+    const url = new URL(`${API_BASE}${path}`, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    if (params) {
+        for (const [k, v] of Object.entries(params)) {
+            if (v !== undefined && v !== "" && v !== null) {
+                url.searchParams.set(k, String(v));
+            }
         }
-        cursor
-      }
-      pageInfo { hasNextPage endCursor }
     }
-  }
-`;
-
-export const RUN_QUERY = gql`
-  query GetRun($runId: ID!) {
-    run(runId: $runId) {
-      runId moduleId mode state config createdAt startedAt endedAt lastBatchAt
-      passFail errorMessage batchCount sampleCount
-      client { clientId hostname }
-      resultBatches(limit: 100) {
-        edges {
-          node { runId batchSeq receivedAt tsFirst tsLast sampleCount primaryValue passFail tags payload }
-          cursor
-        }
-        pageInfo { hasNextPage endCursor }
-      }
-    }
-  }
-`;
-
-export const RUN_BATCHES_QUERY = gql`
-  query GetRunBatches($runId: ID!, $limit: Int, $after: String) {
-    run(runId: $runId) {
-      resultBatches(limit: $limit, after: $after) {
-        edges {
-          node { runId batchSeq receivedAt tsFirst tsLast sampleCount primaryValue passFail tags payload }
-          cursor
-        }
-        pageInfo { hasNextPage endCursor }
-      }
-    }
-  }
-`;
-
-export const LOGS_QUERY = gql`
-  query GetLogs($runId: ID, $source: String, $limit: Int, $after: String) {
-    run(runId: $runId) {
-      logs(source: $source, limit: $limit, after: $after) {
-        edges {
-          node { runId source seq timestamp level text }
-          cursor
-        }
-        pageInfo { hasNextPage endCursor }
-      }
-    }
-  }
-`;
-
-export const SEARCH_LOGS_QUERY = gql`
-  query SearchLogs($query: String!, $runId: ID, $limit: Int) {
-    search(query: $query, runId: $runId, limit: $limit) {
-      runId source seq timestamp level text
-    }
-  }
-`;
-
-// ── Mutations ─────────────────────────────────────────────────────────────────
-
-export const CONFIGURE_RUN_MUTATION = gql`
-  mutation ConfigureRun($input: ConfigureRunInput!) {
-    configureRun(input: $input) { runId state }
-  }
-`;
-
-export const START_RUN_MUTATION = gql`
-  mutation StartRun($runId: ID!) {
-    startRun(runId: $runId) { runId state }
-  }
-`;
-
-export const STOP_RUN_MUTATION = gql`
-  mutation StopRun($runId: ID!) {
-    stopRun(runId: $runId) { runId state }
-  }
-`;
-
-export const PAUSE_RUN_MUTATION = gql`
-  mutation PauseRun($runId: ID!) {
-    pauseRun(runId: $runId) { runId state }
-  }
-`;
-
-export const RESUME_RUN_MUTATION = gql`
-  mutation ResumeRun($runId: ID!) {
-    resumeRun(runId: $runId) { runId state }
-  }
-`;
-
-export const RESTART_RUN_MUTATION = gql`
-  mutation RestartRun($runId: ID!) {
-    restartRun(runId: $runId) { runId state }
-  }
-`;
-
-export const ENABLE_MODULE_MUTATION = gql`
-  mutation EnableModule($clientId: ID!, $moduleId: String!, $enabled: Boolean!) {
-    enableModule(clientId: $clientId, moduleId: $moduleId, enabled: $enabled) {
-      clientId moduleId enabled
-    }
-  }
-`;
-
-// ── Typed fetch helpers ────────────────────────────────────────────────────────
-
-export async function fetchClients(): Promise<Client[]> {
-    const data = await gqlClient.request<{ clients: Client[] }>(CLIENTS_QUERY);
-    return data.clients;
+    return url.toString();
 }
 
-export async function fetchClient(clientId: string): Promise<Client> {
-    const data = await gqlClient.request<{ client: Client }>(CLIENT_QUERY, { clientId });
-    return data.client;
+/**
+ * Wrapper around fetch that:
+ *   - Sends/receives JSON
+ *   - Includes session cookie (credentials: "include")
+ *   - Throws ApiError on non-2xx responses
+ */
+async function request<T>(method: string, path: string, body?: unknown, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+    const url = apiUrl(path, params);
+    const init: RequestInit = {
+        method,
+        credentials: "include",
+        headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+    };
+    const res = await fetch(url, init);
+    if (!res.ok) {
+        let errMsg = `HTTP ${res.status}`;
+        try {
+            const err = await res.json() as { error?: string };
+            if (err.error) errMsg = err.error;
+        } catch { /* ignore */ }
+        throw new ApiError(errMsg, res.status);
+    }
+    if (res.status === 204) return undefined as unknown as T;
+    return res.json() as Promise<T>;
 }
 
-export async function fetchRuns(vars: {
-    clientId?: string;
-    moduleId?: string;
-    state?: RunState;
+export class ApiError extends Error {
+    constructor(message: string, public readonly status: number) {
+        super(message);
+        this.name = "ApiError";
+    }
+    get isUnauthorized() { return this.status === 401; }
+    get isNotFound()     { return this.status === 404; }
+}
+
+// ---------------------------------------------------------------------------
+// Health
+// ---------------------------------------------------------------------------
+
+export async function fetchHealth(): Promise<{ status: string }> {
+    return request("GET", "/api/v1/health");
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export interface LoginResponse {
+    user_id: string;
+    username: string;
+}
+
+export async function authLogin(username: string, password: string): Promise<LoginResponse> {
+    return request("POST", "/api/v1/auth/login", { username, password });
+}
+
+export async function authLogout(): Promise<void> {
+    return request("POST", "/api/v1/auth/logout");
+}
+
+export interface ApiToken {
+    id: string;
+    label: string;
+    created_at: string;
+    last_used_at: string | null;
+}
+
+export async function listApiTokens(): Promise<ApiToken[]> {
+    const res = await request<{ tokens: ApiToken[] }>("GET", "/api/v1/auth/tokens");
+    return res.tokens ?? [];
+}
+
+export async function createApiToken(label: string): Promise<{ id: string; label: string; token_str: string }> {
+    return request("POST", "/api/v1/auth/tokens", { label });
+}
+
+export async function revokeApiToken(id: string): Promise<void> {
+    return request("DELETE", `/api/v1/auth/tokens/${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Board (target)
+// ---------------------------------------------------------------------------
+
+export async function fetchBoard(): Promise<Board | null> {
+    try {
+        return await request<Board>("GET", "/api/v1/target");
+    } catch (e) {
+        if (e instanceof ApiError && e.isNotFound) return null;
+        throw e;
+    }
+}
+
+export async function registerBoard(board: Partial<Board>): Promise<Board> {
+    return request("POST", "/api/v1/target", board);
+}
+
+export async function updateBoard(board: Partial<Board>): Promise<Board> {
+    return request("PUT", "/api/v1/target", board);
+}
+
+export async function sendHeartbeat(board: Partial<Board>): Promise<void> {
+    return request("POST", "/api/v1/target/heartbeat", board);
+}
+
+// ---------------------------------------------------------------------------
+// Runs
+// ---------------------------------------------------------------------------
+
+export interface RunsFilter {
+    status?: string;
+    mode?: string;
     limit?: number;
-    after?: string;
-}): Promise<{ edges: Array<{ node: Run; cursor: string }>; pageInfo: { hasNextPage: boolean; endCursor: string | null } }> {
-    const data = await gqlClient.request<{ runs: { edges: Array<{ node: Run; cursor: string }>; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(
-        RUNS_QUERY,
-        vars
-    );
-    return data.runs;
+    offset?: number;
 }
 
-export async function fetchRun(runId: string): Promise<Run> {
-    const data = await gqlClient.request<{ run: Run }>(RUN_QUERY, { runId });
-    return data.run;
+export async function fetchRuns(filter: RunsFilter = {}): Promise<PaginatedRuns> {
+    const res = await request<{ runs: Run[]; total: number }>("GET", "/api/v1/runs", undefined, filter as Record<string, string | number | boolean | undefined>);
+    return { runs: res.runs ?? [], total: res.total ?? 0 };
 }
 
-export async function configureRun(input: ConfigureRunInput): Promise<ConfigureRunResult> {
-    const data = await gqlClient.request<{ configureRun: ConfigureRunResult }>(
-        CONFIGURE_RUN_MUTATION,
-        { input }
-    );
-    return data.configureRun;
+export async function fetchRun(id: string): Promise<Run> {
+    return request("GET", `/api/v1/runs/${id}`);
 }
 
-export async function startRun(runId: string): Promise<{ runId: string; state: RunState }> {
-    const data = await gqlClient.request<{ startRun: { runId: string; state: RunState } }>(
-        START_RUN_MUTATION,
-        { runId }
-    );
-    return data.startRun;
+export async function createRun(input: CreateRunInput): Promise<Run> {
+    return request("POST", "/api/v1/runs", input);
 }
 
-export async function stopRun(runId: string): Promise<{ runId: string; state: RunState }> {
-    const data = await gqlClient.request<{ stopRun: { runId: string; state: RunState } }>(
-        STOP_RUN_MUTATION,
-        { runId }
-    );
-    return data.stopRun;
+export async function cancelRun(id: string): Promise<void> {
+    await request("POST", `/api/v1/runs/${id}/cancel`);
 }
 
-export async function enableModule(
-    clientId: string,
-    moduleId: string,
-    enabled: boolean
-): Promise<ModuleSetting> {
-    const data = await gqlClient.request<{ enableModule: ModuleSetting }>(
-        ENABLE_MODULE_MUTATION,
-        { clientId, moduleId, enabled }
-    );
-    return data.enableModule;
+export async function pauseRun(id: string): Promise<void> {
+    await request("POST", `/api/v1/runs/${id}/pause`);
+}
+
+export async function resumeRun(id: string): Promise<void> {
+    await request("POST", `/api/v1/runs/${id}/resume`);
+}
+
+// ---------------------------------------------------------------------------
+// Runs — results
+// ---------------------------------------------------------------------------
+
+export async function fetchRunResults(runId: string, params?: { limit?: number; offset?: number }): Promise<PaginatedResults> {
+    const res = await request<{ results: Result[]; total: number }>("GET", `/api/v1/runs/${runId}/results`, undefined, params as Record<string, number | undefined>);
+    return { results: res.results ?? [], total: res.total ?? 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Runs — logs
+// ---------------------------------------------------------------------------
+
+export interface LogFilter {
+    level?: string;
+    source?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    offset?: number;
+}
+
+export async function fetchRunLogs(runId: string, filter: LogFilter = {}): Promise<LogEntry[]> {
+    const res = await request<{ logs: LogEntry[]; total: number }>("GET", `/api/v1/runs/${runId}/logs`, undefined, filter as Record<string, string | number | undefined>);
+    return res.logs ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// Test Configs
+// ---------------------------------------------------------------------------
+
+export async function fetchConfigs(): Promise<TestConfig[]> {
+    const res = await request<{ configs: TestConfig[] }>("GET", "/api/v1/configs");
+    return res.configs ?? [];
+}
+
+export async function fetchConfig(id: string): Promise<TestConfig> {
+    return request("GET", `/api/v1/configs/${id}`);
+}
+
+export async function createConfig(input: CreateConfigInput): Promise<TestConfig> {
+    return request("POST", "/api/v1/configs", input);
+}
+
+export async function updateConfig(id: string, input: Partial<CreateConfigInput>): Promise<TestConfig> {
+    return request("PUT", `/api/v1/configs/${id}`, input);
+}
+
+export async function deleteConfig(id: string): Promise<void> {
+    return request("DELETE", `/api/v1/configs/${id}`);
+}
+
+export async function archiveConfig(id: string): Promise<void> {
+    return request("POST", `/api/v1/configs/${id}/archive`);
+}
+
+// ---------------------------------------------------------------------------
+// Modules
+// ---------------------------------------------------------------------------
+
+export interface ModuleInfo {
+    id: string;
+    proto_package: string;
+    config_type: string;
+    result_type: string;
+    version: string;
+    status: string;
+    source_path: string;
+    category?: string;
+}
+
+export async function fetchModules(): Promise<ModuleInfo[]> {
+    const res = await request<{ modules: ModuleInfo[] }>("GET", "/api/v1/modules");
+    return res.modules ?? [];
+}
+
+export async function fetchModule(id: string): Promise<ModuleInfo> {
+    return request("GET", `/api/v1/modules/${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// OTA
+// ---------------------------------------------------------------------------
+
+export async function fetchOtaList(): Promise<OtaUpgrade[]> {
+    const res = await request<{ upgrades: OtaUpgrade[] }>("GET", "/api/v1/ota");
+    return res.upgrades ?? [];
+}
+
+export async function fetchOtaUpgrade(id: string): Promise<OtaUpgrade> {
+    return request("GET", `/api/v1/ota/${id}`);
+}
+
+export async function uploadArtifact(file: File): Promise<OtaUpgrade> {
+    const url = apiUrl("/api/v1/ota/upload");
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(url, { method: "POST", credentials: "include", body: form });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new ApiError(err.error ?? `HTTP ${res.status}`, res.status);
+    }
+    return res.json() as Promise<OtaUpgrade>;
+}
+
+export async function triggerUpgrade(id: string): Promise<void> {
+    return request("POST", `/api/v1/ota/${id}/trigger`);
+}
+
+export async function rollbackUpgrade(id: string): Promise<void> {
+    return request("POST", `/api/v1/ota/${id}/rollback`);
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export async function fetchNotifications(): Promise<Notification[]> {
+    const res = await request<{ notifications: Notification[] }>("GET", "/api/v1/notifications");
+    return res.notifications ?? [];
+}
+
+export async function fetchNotificationCount(): Promise<number> {
+    const res = await request<{ count: number }>("GET", "/api/v1/notifications/count");
+    return res.count ?? 0;
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+    return request("POST", `/api/v1/notifications/${id}/read`);
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+    return request("POST", "/api/v1/notifications/read-all");
 }

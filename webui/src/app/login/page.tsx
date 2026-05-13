@@ -2,23 +2,31 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { login, getSession } from "@/lib/auth/session";
+import { login, isAuthenticated } from "@/lib/auth/session";
+import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import {
+    Card,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+    CardContent,
+    CardFooter,
+} from "@/components/ui/card";
 import { Cpu, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
     const router = useRouter();
     const [username, setUsername] = useState("admin");
     const [password, setPassword] = useState("");
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError]     = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
     // Redirect if already logged in.
     useEffect(() => {
-        if (getSession()) router.replace("/");
+        if (isAuthenticated()) router.replace("/");
     }, [router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -26,14 +34,14 @@ export default function LoginPage() {
         setError(null);
         setLoading(true);
         try {
-            const ok = await login(username, password);
-            if (ok) {
-                router.replace("/");
-            } else {
+            await login(username, password);
+            router.replace("/");
+        } catch (err) {
+            if (err instanceof ApiError && err.isUnauthorized) {
                 setError("Invalid username or password.");
+            } else {
+                setError("Login failed. Please try again.");
             }
-        } catch {
-            setError("Login failed. Try again.");
         } finally {
             setLoading(false);
         }
@@ -47,16 +55,16 @@ export default function LoginPage() {
                         <Cpu className="h-6 w-6 text-primary" />
                     </div>
                     <h1 className="text-2xl font-bold tracking-tight">Acadia IV&amp;V</h1>
-                    <p className="text-sm text-muted-foreground">Independent Validation &amp; Verification Dashboard</p>
+                    <p className="text-sm text-muted-foreground">
+                        Independent Validation &amp; Verification Dashboard
+                    </p>
                 </div>
 
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-lg">Sign in</CardTitle>
                         <CardDescription>
-                            Enter your local account credentials to continue.
-                            <br />
-                            <span className="text-xs text-muted-foreground/70">First login: any password is accepted and saved.</span>
+                            Enter your credentials to continue.
                         </CardDescription>
                     </CardHeader>
 
@@ -93,7 +101,7 @@ export default function LoginPage() {
 
                         <CardFooter>
                             <Button type="submit" className="w-full" disabled={loading}>
-                                {loading ? "Signing in…" : "Sign in"}
+                                {loading ? "Signing in\u2026" : "Sign in"}
                             </Button>
                         </CardFooter>
                     </form>
