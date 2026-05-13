@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
-import { AppShell } from "@/components/layout/app-shell";
 import { QueryProvider } from "@/components/layout/query-provider";
 import "@/styles/globals.css";
 
@@ -19,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={inter.variable}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <QueryProvider>
-            <AppShell>{children}</AppShell>
+            {children}
             <Toaster richColors closeButton />
           </QueryProvider>
         </ThemeProvider>

@@ -29,7 +29,8 @@ export function formatDuration(ms: number): string {
     if (m > 0) return `${m}m ${s % 60}s`;
     return `${s}s`;
 }
-export function getModuleLabel(moduleId: string): string {
+export function getModuleLabel(moduleId: string | undefined | null): string {
+    if (!moduleId) return "";
     return moduleId
         .split("_")
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
