@@ -52,11 +52,11 @@ export function BoardHeader() {
 
     if (!board) {
         return (
-            <header className="flex h-14 items-center justify-between border-b bg-card px-4 shrink-0">
+            <header className="flex h-16 items-center justify-between border-b border-border/50 bg-background/80 backdrop-blur-md px-6 shrink-0 z-10 sticky top-0">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Cpu className="h-4 w-4" />
-                    <span>No board configured</span>
-                    <Link href="/settings" className="text-primary text-xs hover:underline ml-2">
+                    <Cpu className="h-5 w-5" />
+                    <span className="font-medium">No board configured</span>
+                    <Link href="/settings" className="text-primary text-xs hover:text-primary/80 transition-colors ml-2 font-medium">
                         → Add board
                     </Link>
                 </div>
@@ -72,23 +72,24 @@ export function BoardHeader() {
 
     return (
         <header
-            className="flex h-14 items-center justify-between border-b bg-card px-4 shrink-0 cursor-pointer hover:bg-accent/30 transition-colors"
+            className="flex h-16 items-center justify-between border-b border-border/50 bg-background/80 backdrop-blur-md px-6 shrink-0 cursor-pointer hover:bg-accent/40 transition-colors z-10 sticky top-0"
             onClick={() => { window.location.href = "/settings"; }}
             role="banner"
             title="Click to open Settings"
         >
             <div className="flex items-center gap-4 min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0 bg-secondary/50 px-3 py-1.5 rounded-full border border-border/50">
                     <Cpu className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="font-semibold text-sm truncate">{board.hostname ?? board.clientId}</span>
+                    <span className="font-semibold text-sm truncate tracking-tight">{board.hostname ?? board.clientId}</span>
+                    <div className="w-px h-3 bg-border mx-1" />
                     <BoardStatus online={boardOnline} />
                 </div>
 
-                <div className="hidden md:flex items-center gap-3 text-xs text-muted-foreground">
+                <div className="hidden md:flex items-center gap-3 text-xs text-muted-foreground bg-muted/50 px-3 py-1 rounded-full border border-border/40">
                     {board.halVersion && <span>HAL {board.halVersion}</span>}
                     {board.clientVersion && <span>Client {board.clientVersion}</span>}
                     {!serverReachable && (
-                        <span className="text-yellow-500">Server unreachable</span>
+                        <span className="text-amber-500 font-medium">Server unreachable</span>
                     )}
                 </div>
 
