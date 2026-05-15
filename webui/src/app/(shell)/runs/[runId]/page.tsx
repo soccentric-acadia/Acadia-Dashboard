@@ -2,9 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useRun, useRunResults, useRunSSE, useCancelRun, usePauseRun, useResumeRun } from "@/lib/api/queries";
+import {
+  useRun, useRunResults, useRunSSE,
+  useCancelRun, usePauseRun, useResumeRun,
+  useSetBaseline, useRerunRun, useExportRun, useDeleteRun,
+} from "@/lib/api/queries";
 import { LiveDot } from "@/components/primitives/live-dot";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -19,7 +24,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   ArrowLeft, Square, Pause, Play, GitCompare, Loader2,
-  CheckCircle2, AlertCircle,
+  CheckCircle2, AlertCircle, Download, Repeat, Flag, Trash2,
 } from "lucide-react";
 import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
 import type { Run, TestResult, RunStatus, Status } from "@/lib/api/types";
@@ -67,6 +72,7 @@ function ResultRow({ result }: { result: TestResult }) {
 
 export default function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = use(params);
+  const router = useRouter();
   const { data: run, isLoading } = useRun(runId);
   const { data: resultsPage, isLoading: resultsLoading } = useRunResults(runId, { limit: 500 });
   const results = resultsPage?.results ?? [];
@@ -74,6 +80,10 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const cancelRun = useCancelRun();
   const pauseRun = usePauseRun();
   const resumeRun = useResumeRun();
+  const setBaseline = useSetBaseline();
+  const rerunRun = useRerunRun();
+  const exportRun = useExportRun();
+  const deleteRun = useDeleteRun();
 
   const isActive = !!run && isActiveStatus(run.status as RunStatus);
   useRunSSE(runId, isActive);
@@ -182,6 +192,69 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" asChild>
             <Link href={`/runs/compare?a=${runId}`}><GitCompare className="h-3 w-3" /> Compare</Link>
           </Button>
+          {!isActive && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                disabled={setBaseline.isPending || run.baseline_flag}
+                onClick={() => setBaseline.mutate(runId, {
+                  onSuccess: () => toast.success("Baseline set"),
+                  onError: (e: Error) => toast.error(e.message),
+                })}
+              >
+                <Flag className="h-3 w-3" />{run.baseline_flag ? "Baseline" : "Set baseline"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                disabled={rerunRun.isPending}
+                onClick={() => rerunRun.mutate(runId, {
+                  onSuccess: (newRun) => { toast.success("Re-run created"); router.push(`/runs/${newRun.id}`); },
+                  onError: (e: Error) => toast.error(e.message),
+                })}
+              >
+                <Repeat className="h-3 w-3" /> Re-run
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                disabled={exportRun.isPending}
+                onClick={async () => {
+                  try {
+                    const blob = await exportRun.mutateAsync({ id: runId, format: "csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url; a.download = `run-${runId.slice(0, 8)}.csv`; a.click();
+                    URL.revokeObjectURL(url);
+                  } catch (e) {
+                    const message = e instanceof Error ? e.message : "Export failed";
+                    toast.error(message);
+                  }
+                }}
+              >
+                <Download className="h-3 w-3" /> Export
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-xs text-destructive hover:bg-destructive/10"
+                disabled={deleteRun.isPending}
+                onClick={() => {
+                  if (!window.confirm("Delete this run permanently?")) return;
+                  deleteRun.mutate(runId, {
+                    onSuccess: () => { toast.success("Run deleted"); router.push("/runs"); },
+                    onError: (e: Error) => toast.error(e.message),
+                  });
+                }}
+              >
+                <Trash2 className="h-3 w-3" /> Delete
+              </Button>
+            </>
+          )}
         </div>
       </div>
 

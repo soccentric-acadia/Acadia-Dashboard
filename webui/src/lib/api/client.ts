@@ -320,18 +320,21 @@ export async function markAllNotificationsRead(): Promise<void> {
 
 export interface Schedule {
     id: string;
-    name: string;
-    cron_expr: string;
-    config_id: string;
+    template_id: string;
+    cron_expression: string;
+    run_at: string;
     enabled: boolean;
+    last_run_at: string;
+    next_run_at: string;
     created_at: string;
     created_by: string;
 }
 
 export interface CreateScheduleInput {
-    name: string;
-    cron_expr: string;
-    config_id: string;
+    template_id: string;
+    cron_expression: string;
+    run_at?: string;
+    enabled?: boolean;
 }
 
 export async function fetchSchedules(): Promise<Schedule[]> {
@@ -356,11 +359,13 @@ export async function deleteSchedule(id: string): Promise<void> {
 }
 
 export async function enableSchedule(id: string): Promise<Schedule> {
-    return request("POST", `/api/v1/schedules/${id}/enable`);
+    await request("POST", `/api/v1/schedules/${id}/enable`);
+    return fetchSchedule(id);
 }
 
 export async function disableSchedule(id: string): Promise<Schedule> {
-    return request("POST", `/api/v1/schedules/${id}/disable`);
+    await request("POST", `/api/v1/schedules/${id}/disable`);
+    return fetchSchedule(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -371,9 +376,10 @@ export interface Template {
     id: string;
     name: string;
     description: string;
-    module_id: string;
-    config_snapshot: unknown;
-    archived: boolean;
+    mode: import("./types").TestMode;
+    common_config?: Record<string, unknown>;
+    modules?: import("./types").ModuleConfig[];
+    is_archived: boolean;
     created_at: string;
     created_by: string;
 }
@@ -381,8 +387,9 @@ export interface Template {
 export interface CreateTemplateInput {
     name: string;
     description?: string;
-    module_id: string;
-    config_snapshot: unknown;
+    mode: import("./types").TestMode;
+    common_config?: Record<string, unknown>;
+    modules?: import("./types").ModuleConfig[];
 }
 
 export async function fetchTemplates(): Promise<Template[]> {
@@ -407,11 +414,12 @@ export async function deleteTemplate(id: string): Promise<void> {
 }
 
 export async function archiveTemplate(id: string): Promise<Template> {
-    return request("POST", `/api/v1/templates/${id}/archive`);
+    await request("POST", `/api/v1/templates/${id}/archive`);
+    return fetchTemplate(id);
 }
 
-export async function instantiateTemplate(id: string, name: string): Promise<import("./types").TestConfig> {
-    return request("POST", `/api/v1/templates/${id}/instantiate`, { name });
+export async function instantiateTemplate(id: string): Promise<{ config_json: string }> {
+    return request("POST", `/api/v1/templates/${id}/instantiate`, {});
 }
 
 // ---------------------------------------------------------------------------
@@ -423,7 +431,7 @@ export async function fetchGlobalLogs(filter: import("./client").LogFilter & { r
     return res.logs ?? [];
 }
 
-export async function searchLogs(q: string, params: { limit?: number; offset?: number } = {}): Promise<import("./types").LogEntry[]> {
+export async function searchLogs(q: string, params: { limit?: number; offset?: number; run_id?: string; source?: string; level?: string } = {}): Promise<import("./types").LogEntry[]> {
     const res = await request<{ logs: import("./types").LogEntry[] }>("GET", "/api/v1/logs/search", undefined, { q, ...params } as Record<string, string | number>);
     return res.logs ?? [];
 }
@@ -451,7 +459,7 @@ export async function deleteLogBookmark(id: string): Promise<void> {
 export interface SavedView {
     id: string;
     name: string;
-    filter_json: string;
+    filters_json: string;
     created_at: string;
 }
 
@@ -460,8 +468,8 @@ export async function fetchSavedViews(): Promise<SavedView[]> {
     return res.views ?? [];
 }
 
-export async function createSavedView(name: string, filter_json: string): Promise<SavedView> {
-    return request("POST", "/api/v1/logs/views", { name, filter_json });
+export async function createSavedView(name: string, filters_json: string): Promise<SavedView> {
+    return request("POST", "/api/v1/logs/views", { name, filters_json });
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,8 @@ import { useEffect, useRef } from "react";
 import {
     fetchHealth,
     fetchBoard,
+    updateBoard,
+    deleteBoard,
     fetchRuns,
     fetchRun,
     createRun,
@@ -14,12 +16,24 @@ import {
     resumeRun,
     fetchRunResults,
     fetchRunLogs,
+    fetchGlobalLogs,
+    searchLogs,
+    fetchLogBookmarks,
+    createLogBookmark,
+    deleteLogBookmark,
+    fetchSavedViews,
+    createSavedView,
     fetchConfigs,
     fetchConfig,
     createConfig,
     updateConfig,
     deleteConfig,
     archiveConfig,
+    fetchTemplates,
+    createTemplate,
+    deleteTemplate,
+    archiveTemplate,
+    instantiateTemplate,
     fetchModules,
     fetchOtaList,
     fetchOtaUpgrade,
@@ -29,6 +43,22 @@ import {
     fetchNotificationCount,
     markNotificationRead,
     markAllNotificationsRead,
+    fetchAlertRules,
+    createAlertRule,
+    updateAlertRule,
+    deleteAlertRule,
+    deleteRun,
+    setBaseline,
+    rerunRun,
+    exportRun,
+    fetchRetentionSettings,
+    updateRetentionSettings,
+    changePassword,
+    fetchSchedules,
+    createSchedule,
+    deleteSchedule,
+    enableSchedule,
+    disableSchedule,
     fetchModuleResults,
     fetchModuleTrend,
     fetchRunCompare,
@@ -53,16 +83,24 @@ export const keys = {
     run: (id: string) => ["run", id] as const,
     runResults: (id: string, params?: Record<string, unknown>) => ["run", id, "results", params ?? {}] as const,
     runLogs: (id: string, f?: LogFilter) => ["run", id, "logs", f ?? {}] as const,
+    logs: (f?: Record<string, unknown>) => ["logs", f ?? {}] as const,
+    logSearch: (q: string, p?: Record<string, unknown>) => ["logs", "search", q, p ?? {}] as const,
+    logBookmarks: ["logs", "bookmarks"] as const,
+    logViews: ["logs", "views"] as const,
     moduleResults: (id: string, params?: Record<string, unknown>) => ["module", id, "results", params ?? {}] as const,
     moduleTrend: (id: string, testId: string, metricKey: string, source?: string) => ["module", id, "trend", testId, metricKey, source ?? "metrics"] as const,
     runCompare: (a: string, b: string) => ["run-compare", a, b] as const,
     configs: ["configs"] as const,
     config: (id: string) => ["config", id] as const,
+    templates: ["templates"] as const,
     modules: ["modules"] as const,
     ota: ["ota"] as const,
     otaItem: (id: string) => ["ota", id] as const,
     notifications: ["notifications"] as const,
     notificationCount: ["notifications", "count"] as const,
+    schedules: ["schedules"] as const,
+    alertRules: ["alerts"] as const,
+    retention: ["settings", "retention"] as const,
 };
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -132,6 +170,69 @@ export function useRunLogs(runId: string | null | undefined, filter: LogFilter =
         queryKey: keys.runLogs(runId ?? "", filter),
         queryFn: () => fetchRunLogs(runId!, filter),
         enabled: Boolean(runId),
+    });
+}
+
+export function useGlobalLogs(filter: LogFilter & { run_id?: string } = {}) {
+    return useQuery({
+        queryKey: keys.logs(filter),
+        queryFn: () => fetchGlobalLogs(filter),
+        staleTime: 5_000,
+    });
+}
+
+export function useSearchLogs(q: string, params: { limit?: number; offset?: number; run_id?: string; source?: string; level?: string } = {}) {
+    return useQuery({
+        queryKey: keys.logSearch(q, params),
+        queryFn: () => searchLogs(q, params),
+        enabled: q.trim().length > 1,
+        staleTime: 2_000,
+    });
+}
+
+export function useLogBookmarks() {
+    return useQuery({
+        queryKey: keys.logBookmarks,
+        queryFn: fetchLogBookmarks,
+        staleTime: 10_000,
+    });
+}
+
+export function useCreateLogBookmark() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ log_id, note }: { log_id: string; note?: string }) => createLogBookmark(log_id, note ?? ""),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.logBookmarks });
+        },
+    });
+}
+
+export function useDeleteLogBookmark() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => deleteLogBookmark(id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.logBookmarks });
+        },
+    });
+}
+
+export function useSavedViews() {
+    return useQuery({
+        queryKey: keys.logViews,
+        queryFn: fetchSavedViews,
+        staleTime: 10_000,
+    });
+}
+
+export function useCreateSavedView() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ name, filters_json }: { name: string; filters_json: string }) => createSavedView(name, filters_json),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.logViews });
+        },
     });
 }
 
@@ -339,6 +440,162 @@ export function useArchiveConfig() {
     });
 }
 
+// ── Templates ───────────────────────────────────────────────────────────────
+
+export function useTemplates() {
+    return useQuery({
+        queryKey: keys.templates,
+        queryFn: fetchTemplates,
+        staleTime: 30_000,
+    });
+}
+
+export function useCreateTemplate() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: createTemplate,
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.templates });
+        },
+    });
+}
+
+export function useDeleteTemplate() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => deleteTemplate(id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.templates });
+        },
+    });
+}
+
+export function useArchiveTemplate() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => archiveTemplate(id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.templates });
+        },
+    });
+}
+
+export function useInstantiateTemplate() {
+    return useMutation({
+        mutationFn: (id: string) => instantiateTemplate(id),
+    });
+}
+
+// ── Alert rules ───────────────────────────────────────────────────────────────
+
+export function useAlertRules() {
+    return useQuery({
+        queryKey: keys.alertRules,
+        queryFn: fetchAlertRules,
+        staleTime: 30_000,
+    });
+}
+
+export function useCreateAlertRule() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: createAlertRule,
+        onSuccess: () => { qc.invalidateQueries({ queryKey: keys.alertRules }); },
+    });
+}
+
+export function useUpdateAlertRule() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, input }: { id: string; input: Parameters<typeof updateAlertRule>[1] }) =>
+            updateAlertRule(id, input),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: keys.alertRules }); },
+    });
+}
+
+export function useDeleteAlertRule() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => deleteAlertRule(id),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: keys.alertRules }); },
+    });
+}
+
+// ── Run extras ────────────────────────────────────────────────────────────────
+
+export function useDeleteRun() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => deleteRun(id),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: keys.runs() }); },
+    });
+}
+
+export function useSetBaseline() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => setBaseline(id),
+        onSuccess: (_data: unknown, id: string) => { qc.invalidateQueries({ queryKey: keys.run(id) }); },
+    });
+}
+
+export function useRerunRun() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => rerunRun(id),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: keys.runs() }); },
+    });
+}
+
+export function useExportRun() {
+    return useMutation({
+        mutationFn: ({ id, format }: { id: string; format?: "csv" | "json" }) => exportRun(id, format),
+    });
+}
+
+// ── Retention settings ────────────────────────────────────────────────────────
+
+export function useRetentionSettings() {
+    return useQuery({
+        queryKey: keys.retention,
+        queryFn: fetchRetentionSettings,
+        staleTime: 60_000,
+    });
+}
+
+export function useUpdateRetentionSettings() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (s: Parameters<typeof updateRetentionSettings>[0]) => updateRetentionSettings(s),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: keys.retention }); },
+    });
+}
+
+// ── Board mutations ───────────────────────────────────────────────────────────
+
+export function useUpdateBoard() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (board: Parameters<typeof updateBoard>[0]) => updateBoard(board),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: keys.board }); },
+    });
+}
+
+export function useDeleteBoard() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: () => deleteBoard(),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: keys.board }); },
+    });
+}
+
+export function useChangePassword() {
+    return useMutation({
+        mutationFn: ({ old_password, new_password }: { old_password: string; new_password: string }) =>
+            changePassword(old_password, new_password),
+    });
+}
+
 // ── Modules ───────────────────────────────────────────────────────────────────
 
 export function useModules() {
@@ -425,6 +682,56 @@ export function useMarkAllNotificationsRead() {
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: keys.notifications });
             qc.invalidateQueries({ queryKey: keys.notificationCount });
+        },
+    });
+}
+
+// ── Schedules ───────────────────────────────────────────────────────────────
+
+export function useSchedules() {
+    return useQuery({
+        queryKey: keys.schedules,
+        queryFn: fetchSchedules,
+        staleTime: 10_000,
+    });
+}
+
+export function useCreateSchedule() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: createSchedule,
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.schedules });
+        },
+    });
+}
+
+export function useDeleteSchedule() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => deleteSchedule(id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.schedules });
+        },
+    });
+}
+
+export function useEnableSchedule() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => enableSchedule(id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.schedules });
+        },
+    });
+}
+
+export function useDisableSchedule() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => disableSchedule(id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: keys.schedules });
         },
     });
 }
