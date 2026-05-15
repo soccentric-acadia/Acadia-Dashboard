@@ -122,6 +122,7 @@ export default function SettingsPage() {
               { label: "HAL", value: <span className="font-mono text-xs">{board.hal_version}</span> },
               { label: "Client", value: <span className="font-mono text-xs">{board.client_version}</span> },
               { label: "OS", value: <span className="font-mono text-xs">{board.os_version}</span> },
+              { label: "Dashboard", value: <span className="font-mono text-xs">{process.env.NEXT_PUBLIC_APP_VERSION ?? "dev"}</span> },
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between items-center text-sm py-0.5">
                 <span className="text-muted-foreground">{label}</span>

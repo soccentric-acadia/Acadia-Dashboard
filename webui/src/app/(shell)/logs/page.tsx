@@ -18,7 +18,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, FileText, Bookmark, Save } from "lucide-react";
+import Link from "next/link";
+import { Search, Bookmark, Save, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pageVariants } from "@/components/motion/presets";
 import { toast } from "sonner";
@@ -152,11 +153,6 @@ function LogsPageContent() {
       <SectionCard title={`${filtered.length} entries`} noPadding>
         {isLoading ? (
           <div className="p-3 space-y-1">{Array.from({ length: 12 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />)}</div>
-        ) : !runId ? (
-          <div className="flex flex-col items-center gap-3 py-12 text-center">
-            <FileText className="h-10 w-10 text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">Navigate to a run to see its logs</p>
-          </div>
         ) : filtered.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">No log entries</div>
         ) : (
@@ -167,8 +163,15 @@ function LogsPageContent() {
                   <span className="text-muted-foreground/60 shrink-0 w-20">{new Date(entry.timestamp).toLocaleTimeString()}</span>
                   <span className={cn("shrink-0 w-12 font-semibold", LEVEL_COLORS[(entry.severity || "").toUpperCase()] ?? "text-foreground")}>{entry.severity}</span>
                   <span className="break-all">{entry.message}</span>
-                  <div className="ml-auto flex items-center gap-1">
+                  <div className="ml-auto flex items-center gap-1 shrink-0">
                     {bookmarkedIds.has(entry.id) ? <Badge variant="secondary">Saved</Badge> : null}
+                    {entry.run_id && entry.run_id !== runId && (
+                      <Button variant="ghost" size="icon" className="h-6 w-6" asChild aria-label="View run">
+                        <Link href={`/runs/${entry.run_id}`}>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"

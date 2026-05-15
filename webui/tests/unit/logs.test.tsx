@@ -46,9 +46,9 @@ describe("LogsPage", () => {
         mutateAsyncSaveView.mockResolvedValue({ id: "v1", name: "view" });
     });
 
-    it("shows 'Navigate to a run' placeholder without run_id param", () => {
+    it("shows 'No log entries' placeholder without run_id param and no logs", () => {
         render(<LogsPage />);
-        expect(screen.getByText(/navigate to a run to see its logs/i)).toBeTruthy();
+        expect(screen.getByText(/no log entries/i)).toBeTruthy();
     });
 
     it("renders search input and Save view button", () => {
