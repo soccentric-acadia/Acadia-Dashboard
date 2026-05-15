@@ -1,205 +1,362 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "motion/react";
 import { useBoard } from "@/lib/board/context";
-import { useRuns, useHealth } from "@/lib/api/queries";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useRuns, useHealth, useModules } from "@/lib/api/queries";
+import { useQuery } from "@tanstack/react-query";
+import { getModuleRegistry } from "@/lib/proto/registry";
+import { KpiCard } from "@/components/primitives/kpi-card";
+import { SectionCard } from "@/components/primitives/section-card";
+import { LiveDot } from "@/components/primitives/live-dot";
+import { ModuleIcon } from "@/components/primitives/module-icon";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Server, Play, CheckCircle2, Activity, ChevronRight, XCircle } from "lucide-react";
-import { formatRelativeTime } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { listItemVariants, pageVariants } from "@/components/motion/presets";
+import {
+  Server, Activity, CheckCircle2, XCircle, Gauge, Zap,
+  ChevronRight, Plus, BarChart3,
+} from "lucide-react";
+import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
 import type { Run } from "@/lib/api/types";
-import { RunStateBadge } from "@/components/runs/run-state-badge";
 
-function HealthBadge() {
-    const { isLoading, isError } = useHealth();
-    if (isLoading) return <Badge variant="outline" className="bg-background/50">Checking Server\u2026</Badge>;
-    if (isError) return <Badge variant="destructive">Server unreachable</Badge>;
-    return <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Server reachable</Badge>;
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function runElapsedMs(run: Run): number {
+  if (!run.started_at) return 0;
+  const end = run.finished_at ? new Date(run.finished_at).getTime() : Date.now();
+  return end - new Date(run.started_at).getTime();
 }
 
-function calculateDuration(start: string | null, end: string | null) {
-    if (!start) return "-";
-    const startTime = new Date(start).getTime();
-    const endTime = end ? new Date(end).getTime() : Date.now();
-    const diffMs = endTime - startTime;
-    const seconds = Math.floor((diffMs / 1000) % 60);
-    const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    if (minutes > 0) return `${minutes}m ${seconds}s`;
-    return `${seconds}s`;
+function RunRow({ run }: { run: Run }) {
+  return (
+    <motion.tr
+      variants={listItemVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="group border-b border-border/40 hover:bg-accent/20 transition-colors"
+    >
+      <TableCell className="py-2 pl-4">
+        <Link
+          href={`/runs/${run.id}`}
+          className="font-mono text-xs text-primary hover:underline underline-offset-2"
+        >
+          {run.id.slice(0, 12)}
+        </Link>
+      </TableCell>
+      <TableCell className="py-2">
+        <span className="text-sm truncate max-w-[200px] block">{run.name || "—"}</span>
+      </TableCell>
+      <TableCell className="py-2">
+        <RunStateBadge status={run.status} />
+      </TableCell>
+      <TableCell className="py-2 font-technical text-xs text-muted-foreground">
+        {formatDuration(runElapsedMs(run))}
+      </TableCell>
+      <TableCell className="py-2 text-xs text-muted-foreground">
+        {run.started_at ? formatRelativeTime(run.started_at) : "—"}
+      </TableCell>
+      <TableCell className="py-2 pr-4 text-right">
+        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" asChild>
+          <Link href={`/runs/${run.id}`}><ChevronRight className="h-3 w-3" /></Link>
+        </Button>
+      </TableCell>
+    </motion.tr>
+  );
 }
+
+// ─── Active run card ───────────────────────────────────────────────────────────
+
+function ActiveRunCard({ run }: { run: Run }) {
+  const [elapsed, setElapsed] = React.useState(() => runElapsedMs(run));
+
+  React.useEffect(() => {
+    const id = setInterval(() => setElapsed(runElapsedMs(run)), 1000);
+    return () => clearInterval(id);
+  }, [run]);
+
+  return (
+    <Link href={`/runs/${run.id}`}>
+      <motion.div
+        whileHover={{ y: -1, scale: 1.005 }}
+        className="rounded-lg border border-status-running/30 bg-status-running-bg p-3 space-y-1.5 cursor-pointer hover:border-status-running/60 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <LiveDot state="running" size="sm" />
+          <span className="text-sm font-medium truncate flex-1">{run.name || run.id.slice(0, 16)}</span>
+          <Badge variant="outline" className="text-[9px] font-mono h-4 px-1.5">
+            {run.mode?.replace("_", " ")}
+          </Badge>
+        </div>
+        <div className="text-[10px] text-muted-foreground font-technical pl-4">
+          {formatDuration(elapsed)}
+        </div>
+      </motion.div>
+    </Link>
+  );
+}
+
+// ─── Module tile ───────────────────────────────────────────────────────────────
+
+function ModuleTile({ id }: { id: string }) {
+  return (
+    <Link href={`/modules/${id}`}>
+      <motion.div
+        variants={listItemVariants}
+        whileHover={{ y: -2, scale: 1.02 }}
+        className="instrument-tile flex flex-col items-center gap-1.5 p-3 rounded-lg cursor-pointer group"
+      >
+        <ModuleIcon moduleId={id} size="md" className="text-muted-foreground group-hover:text-foreground transition-colors" />
+        <span className="font-mono text-[9px] text-muted-foreground text-center leading-tight truncate w-full text-center">
+          {id.replace(/_/g, " ")}
+        </span>
+        <LiveDot state="never" size="xs" />
+      </motion.div>
+    </Link>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-    const { board } = useBoard();
-    const { data: recentRunsData, isLoading: recentLoading } = useRuns({ limit: 10 });
-    const { data: failedRunsData, isLoading: failedLoading } = useRuns({ status: "failed", limit: 5 });
-    const { data: successRunsData, isLoading: successLoading } = useRuns({ status: "completed", limit: 1 });
-    const { data: activeRunsData } = useRuns({ status: "running", limit: 5 });
+  const { board } = useBoard();
+  const { isError: serverUnreachable } = useHealth();
 
-    const recentRuns = recentRunsData?.runs ?? [];
-    const failedRuns = failedRunsData?.runs ?? [];
-    const activeRuns = activeRunsData?.runs ?? [];
-    const lastSuccess = successRunsData?.runs?.[0] ?? null;
+  const { data: recentData, isLoading: recentLoading } = useRuns({ limit: 15 });
+  const { data: activeData } = useRuns({ status: "running", limit: 5 });
+  const { data: failedData } = useRuns({ status: "failed", limit: 5 });
+  const { data: completedData } = useRuns({ status: "completed", limit: 100 });
+  const { data: modules = [], isLoading: modulesLoading } = useQuery({
+    queryKey: ["modules"],
+    queryFn: getModuleRegistry,
+    staleTime: Infinity,
+  });
 
-    return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-                    <p className="text-sm text-muted-foreground mt-1">System overview and recent activity</p>
-                </div>
-                <HealthBadge />
+  const recentRuns = recentData?.runs ?? [];
+  const activeRuns = activeData?.runs ?? [];
+  const failedRuns = failedData?.runs ?? [];
+  const completedRuns = completedData?.runs ?? [];
+
+  const totalCompleted = completedData?.total ?? completedRuns.length;
+  const totalFailed = failedData?.total ?? failedRuns.length;
+  const totalRuns = totalCompleted + totalFailed;
+  const passRate = totalRuns > 0 ? Math.round((totalCompleted / totalRuns) * 100) : 0;
+
+  return (
+    <motion.div
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="space-y-6"
+    >
+      {/* ── KPI row ── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <KpiCard
+          title="Board"
+          value={board?.hostname ?? board?.name ?? "—"}
+          icon={<Server className="h-4 w-4" />}
+          action={board ? { label: "Settings", href: "/settings" } : undefined}
+          compact
+        />
+        <KpiCard
+          title="Active Runs"
+          value={activeRuns.length === 0 ? "None" : String(activeRuns.length)}
+          numericValue={activeRuns.length}
+          icon={<Activity className="h-4 w-4" />}
+          action={{ label: "New run", href: "/runs/new" }}
+          compact
+        />
+        <KpiCard
+          title="Pass Rate"
+          value={`${passRate}%`}
+          numericValue={passRate}
+          suffix="%"
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          compact
+        />
+        <KpiCard
+          title="Failures"
+          value={String(totalFailed)}
+          numericValue={totalFailed}
+          icon={<XCircle className="h-4 w-4" />}
+          action={totalFailed > 0 ? { label: "View", href: "/runs?status=failed" } : undefined}
+          compact
+        />
+        <KpiCard
+          title="Modules"
+          value={String(modules.length)}
+          numericValue={modules.length}
+          icon={<Gauge className="h-4 w-4" />}
+          compact
+        />
+        <KpiCard
+          title="Server"
+          value={serverUnreachable ? "Offline" : "Online"}
+          icon={<Zap className="h-4 w-4" />}
+          compact
+        />
+      </div>
+
+      {/* ── Active runs + module tiles ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Active runs */}
+        <SectionCard
+          title="Active Runs"
+          actions={
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" asChild>
+              <Link href="/runs/new"><Plus className="h-3 w-3" /> New Run</Link>
+            </Button>
+          }
+        >
+          {activeRuns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+              <Activity className="h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">No active runs</p>
+              <Button size="sm" variant="secondary" asChild>
+                <Link href="/runs/new">Start a run</Link>
+              </Button>
             </div>
-
-            {/* Summary cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Board Status</CardTitle>
-                        <Server className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {board ? (
-                            <>
-                                <div className="text-2xl font-bold">{board.hostname || board.name}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    <Badge variant={board.status === "online" ? "default" : "secondary"} className="capitalize text-xs">{board.status}</Badge>
-                                    <span className="ml-1">{board.model}</span>
-                                </p>
-                            </>
-                        ) : (
-                            <>
-                                <div className="text-2xl font-bold text-muted-foreground">No board</div>
-                                <p className="text-xs text-muted-foreground">No board connected</p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Runs</CardTitle>
-                        <Activity className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{activeRuns.length}</div>
-                        <p className="text-xs text-muted-foreground">Currently running</p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Last Failure</CardTitle>
-                        <XCircle className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {failedLoading ? (
-                            <Skeleton className="h-8 w-24" />
-                        ) : failedRuns.length > 0 ? (
-                            <>
-                                <div className="text-2xl font-bold text-destructive">{failedRuns.length}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    Last: {formatRelativeTime(failedRuns[0]?.ended_at ?? failedRuns[0]?.created_at ?? "")}
-                                </p>
-                            </>
-                        ) : (
-                            <>
-                                <div className="text-2xl font-bold text-green-500">0</div>
-                                <p className="text-xs text-muted-foreground">No recent failures</p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Last Success</CardTitle>
-                        <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {successLoading ? (
-                            <Skeleton className="h-8 w-24" />
-                        ) : lastSuccess ? (
-                            <>
-                                <div className="text-2xl font-bold text-green-500">
-                                    {formatRelativeTime(lastSuccess.ended_at ?? lastSuccess.created_at ?? "")}
-                                </div>
-                                <p className="text-xs text-muted-foreground">{lastSuccess.name || lastSuccess.id.slice(0, 12)}</p>
-                            </>
-                        ) : (
-                            <>
-                                <div className="text-2xl font-bold text-muted-foreground">\u2014</div>
-                                <p className="text-xs text-muted-foreground">No completed runs yet</p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
+          ) : (
+            <div className="space-y-2">
+              {activeRuns.map((run) => <ActiveRunCard key={run.id} run={run} />)}
             </div>
+          )}
+        </SectionCard>
 
-            {/* Recent runs table */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Recent Runs</CardTitle>
-                        <CardDescription>Last 10 runs across all modes</CardDescription>
+        {/* Hardware module grid */}
+        <SectionCard
+          title="Hardware Modules"
+          className="lg:col-span-2"
+          actions={
+            <Button size="sm" variant="ghost" className="h-7 text-xs" asChild>
+              <Link href="/modules">View all <ChevronRight className="h-3 w-3 ml-1" /></Link>
+            </Button>
+          }
+          contentClassName="p-2"
+          noPadding
+        >
+          {modulesLoading ? (
+            <div className="grid grid-cols-5 gap-1.5 p-3">
+              {Array.from({ length: 15 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <motion.div
+              className="grid grid-cols-5 gap-1.5 p-3"
+              initial="hidden"
+              animate="visible"
+              variants={{ visible: { transition: { staggerChildren: 0.02 } } }}
+            >
+              {modules.slice(0, 20).map((m) => (
+                <ModuleTile key={m.id} id={m.id} />
+              ))}
+            </motion.div>
+          )}
+        </SectionCard>
+      </div>
+
+      {/* ── Recent runs table + recent failures ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <SectionCard
+          title="Recent Runs"
+          className="lg:col-span-2"
+          noPadding
+          actions={
+            <Button size="sm" variant="ghost" className="h-7 text-xs" asChild>
+              <Link href="/runs">All runs <ChevronRight className="h-3 w-3 ml-1" /></Link>
+            </Button>
+          }
+        >
+          {recentLoading ? (
+            <div className="p-4 space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="pl-4 text-xs">ID</TableHead>
+                  <TableHead className="text-xs">Name</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Duration</TableHead>
+                  <TableHead className="text-xs">Started</TableHead>
+                  <TableHead className="pr-4" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <AnimatePresence initial={false}>
+                  {recentRuns.map((run) => <RunRow key={run.id} run={run} />)}
+                </AnimatePresence>
+              </TableBody>
+            </Table>
+          )}
+        </SectionCard>
+
+        {/* Recent failures */}
+        <SectionCard
+          title="Recent Failures"
+          actions={
+            failedRuns.length > 0 ? (
+              <Button size="sm" variant="ghost" className="h-7 text-xs" asChild>
+                <Link href="/runs?status=failed">All <ChevronRight className="h-3 w-3 ml-1" /></Link>
+              </Button>
+            ) : undefined
+          }
+        >
+          {failedRuns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+              <CheckCircle2 className="h-8 w-8 text-status-pass/40" />
+              <p className="text-sm text-muted-foreground">No recent failures</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {failedRuns.map((run) => (
+                <Link key={run.id} href={`/runs/${run.id}`}>
+                  <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/30 transition-colors group cursor-pointer">
+                    <LiveDot state="fail" size="xs" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-[10px] text-muted-foreground">{run.id.slice(0, 12)}</div>
+                      <div className="text-xs truncate">{run.name || "Unnamed run"}</div>
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href="/runs">View all <ChevronRight className="ml-1 h-4 w-4" /></Link>
-                    </Button>
-                </CardHeader>
-                <CardContent>
-                    {recentLoading ? (
-                        <div className="space-y-2">
-                            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-                        </div>
-                    ) : recentRuns.length === 0 ? (
-                        <div className="py-8 text-center text-sm text-muted-foreground">
-                            <Play className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                            No runs yet. <Link href="/configs" className="underline">Start your first run.</Link>
-                        </div>
-                    ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Run</TableHead>
-                                    <TableHead>Mode</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Started</TableHead>
-                                    <TableHead>Duration</TableHead>
-                                    <TableHead></TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {recentRuns.map((run: Run) => (
-                                    <TableRow key={run.id}>
-                                        <TableCell className="font-medium">
-                                            {run.name || <span className="font-mono text-xs text-muted-foreground">{run.id.slice(0, 12)}\u2026</span>}
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground capitalize">{run.mode}</TableCell>
-                                        <TableCell><RunStateBadge state={run.status} /></TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {run.started_at ? formatRelativeTime(run.started_at) : "\u2014"}
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {calculateDuration(run.started_at ?? null, run.ended_at ?? null)}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" asChild>
-                                                <Link href={`/runs/${run.id}`}><ChevronRight className="h-4 w-4" /></Link>
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
-    );
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {run.started_at ? formatRelativeTime(run.started_at) : ""}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      </div>
+
+      {/* ── Reports & compare quick links ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { href: "/runs", label: "All Runs", icon: Activity },
+          { href: "/runs/compare", label: "Compare Runs", icon: BarChart3 },
+          { href: "/reports", label: "Reports", icon: BarChart3 },
+          { href: "/schedules", label: "Schedules", icon: Zap },
+        ].map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={href}>
+            <motion.div
+              whileHover={{ y: -1 }}
+              className="instrument-tile rounded-lg p-4 flex items-center gap-3 cursor-pointer group hover:border-primary/40 transition-colors"
+            >
+              <Icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+              <span className="text-sm font-medium">{label}</span>
+              <ChevronRight className="h-3 w-3 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+            </motion.div>
+          </Link>
+        ))}
+      </div>
+    </motion.div>
+  );
 }

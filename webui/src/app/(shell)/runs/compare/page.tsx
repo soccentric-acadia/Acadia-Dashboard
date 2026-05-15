@@ -1,185 +1,234 @@
 "use client";
 
-import { Suspense } from "react";
+import * as React from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useRun, useRunCompare } from "@/lib/api/queries";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { motion } from "motion/react";
+import { useRun, useRunResults, useRunCompare } from "@/lib/api/queries";
+import { SectionCard } from "@/components/primitives/section-card";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { AlertCircle, GitCompare, ArrowRight } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { CompareRow, CompareCategory, Status } from "@/lib/api/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ArrowLeft, GitCompare, ArrowRight, Check, X } from "lucide-react";
+import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
+import type { RunStatus, Status } from "@/lib/api/types";
+import { isFailureStatus } from "@/lib/status";
+import { pageVariants } from "@/components/motion/presets";
 
-const CATEGORY_LABEL: Record<CompareCategory, string> = {
-    unchanged: "Unchanged",
-    improved: "Improved",
-    regressed: "Regressed",
-    drifted: "Drifted",
-    disappeared: "Disappeared",
-    appeared: "Appeared",
-};
+// ─── RunSelector ──────────────────────────────────────────────────────────────
 
-const CATEGORY_VARIANT: Record<CompareCategory, React.ComponentProps<typeof Badge>["variant"]> = {
-    unchanged: "secondary",
-    improved: "success",
-    regressed: "destructive",
-    drifted: "timeout",
-    disappeared: "aborted",
-    appeared: "outline",
-};
-
-function CompareContent() {
-    const params = useSearchParams();
-    const router = useRouter();
-    const runAId = params.get("a") ?? "";
-    const runBId = params.get("b") ?? "";
-
-    const { data: runA, isLoading: loadingA, isError: errorA } = useRun(runAId);
-    const { data: runB, isLoading: loadingB, isError: errorB } = useRun(runBId);
-    const { data: comparison, isLoading: loadingCmp, isError: errorCmp } = useRunCompare(
-        runAId && runBId ? runAId : "",
-        runAId && runBId ? runBId : ""
-    );
-
-    if (!runAId || !runBId) return (
-        <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Select two runs to compare via <code>?a=runA&b=runB</code>.
-            </CardContent>
-        </Card>
-    );
-
-    if (loadingA || loadingB || loadingCmp) return (
-        <div className="space-y-4">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-64 w-full" />
-        </div>
-    );
-
-    if (errorA || errorB) return (
-        <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <span>Could not load one or both runs.</span>
-        </div>
-    );
-
-    if (errorCmp || !comparison) return (
-        <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <span>Compare failed. The server may not yet support this endpoint.</span>
-        </div>
-    );
-
-    const rows = comparison.rows ?? [];
-    // Group by category for summary
-    const categoryCount = rows.reduce<Record<string, number>>((acc, r) => {
-        acc[r.category] = (acc[r.category] ?? 0) + 1;
-        return acc;
-    }, {});
-
-    return (
-        <div className="space-y-6">
-            <div className="flex items-center gap-3 flex-wrap">
-                <GitCompare className="h-5 w-5 text-muted-foreground" />
-                <h1 className="text-xl font-bold">Compare runs</h1>
-            </div>
-
-            {/* Run pair header */}
-            <div className="grid grid-cols-2 gap-4">
-                <Card>
-                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Run A</CardTitle></CardHeader>
-                    <CardContent className="flex items-center gap-2">
-                        <span className="font-mono text-sm">{runA?.name ?? runAId.slice(0, 12)}</span>
-                        {runA && <RunStateBadge state={runA.status} />}
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Run B</CardTitle></CardHeader>
-                    <CardContent className="flex items-center gap-2">
-                        <span className="font-mono text-sm">{runB?.name ?? runBId.slice(0, 12)}</span>
-                        {runB && <RunStateBadge state={runB.status} />}
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Category summary chips */}
-            <div className="flex flex-wrap gap-2">
-                {(Object.keys(CATEGORY_LABEL) as CompareCategory[]).map((cat) => (
-                    categoryCount[cat] ? (
-                        <Badge key={cat} variant={CATEGORY_VARIANT[cat]} className="gap-1">
-                            {CATEGORY_LABEL[cat]}
-                            <span className="font-bold">{categoryCount[cat]}</span>
-                        </Badge>
-                    ) : null
-                ))}
-                {rows.length === 0 && <span className="text-sm text-muted-foreground">No differences.</span>}
-            </div>
-
-            {/* Full diff table */}
-            {rows.length > 0 && (
-                <div className="rounded-md border overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="border-b bg-muted/50">
-                            <tr>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Module</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Test</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Status A</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground"></th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Status B</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Category</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Metric drift</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                            {rows.map((row, i) => (
-                                <CompareRowItem key={i} row={row} />
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
-    );
+function RunSelector({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs text-muted-foreground uppercase tracking-wider">{label}</label>
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Paste run ID…"
+        className="font-mono text-xs h-8"
+      />
+    </div>
+  );
 }
 
-function CompareRowItem({ row }: { row: CompareRow }) {
-    const isChanged = row.category !== "unchanged";
-    const driftKeys = row.metrics_drift ? Object.keys(row.metrics_drift) : [];
+// ─── RunSummaryCard ────────────────────────────────────────────────────────────
 
-    return (
-        <tr className={cn("hover:bg-muted/30", isChanged && "bg-muted/10")}>
-            <td className="px-4 py-2 text-xs font-mono text-muted-foreground">{row.module_id}</td>
-            <td className="px-4 py-2 max-w-[200px]">
-                <div className="truncate font-medium">{row.name || row.test_id}</div>
-                {row.name && <div className="text-xs text-muted-foreground font-mono truncate">{row.test_id}</div>}
-            </td>
-            <td className="px-4 py-2">
-                {row.status_a ? <StatusBadge status={row.status_a as Status} severity={row.severity_a as import("@/lib/api/types").Severity | undefined} /> : <span className="text-muted-foreground text-xs">—</span>}
-            </td>
-            <td className="px-2 py-2 text-muted-foreground"><ArrowRight className="h-3 w-3" /></td>
-            <td className="px-4 py-2">
-                {row.status_b ? <StatusBadge status={row.status_b as Status} severity={row.severity_b as import("@/lib/api/types").Severity | undefined} /> : <span className="text-muted-foreground text-xs">—</span>}
-            </td>
-            <td className="px-4 py-2">
-                <Badge variant={CATEGORY_VARIANT[row.category]} className="text-xs">{CATEGORY_LABEL[row.category]}</Badge>
-            </td>
-            <td className="px-4 py-2 text-xs text-muted-foreground">
-                {driftKeys.length > 0
-                    ? driftKeys.map((k) => <div key={k}>{k}: {String(row.metrics_drift![k])}</div>)
-                    : "—"}
-            </td>
-        </tr>
-    );
+function RunSummaryCard({ runId, side }: { runId: string; side: "A" | "B" }) {
+  const { data: run, isLoading } = useRun(runId);
+  const { data: resultsPage } = useRunResults(runId, { limit: 500 });
+  const results = resultsPage?.results ?? [];
+
+  const passed = results.filter((r) => r.status === "PASS").length;
+  const failed = results.filter((r) => isFailureStatus(r.status as Status)).length;
+  const total = results.length;
+  const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+  if (!runId) return (
+    <div className="instrument-tile rounded-xl p-6 flex items-center justify-center text-muted-foreground/40 min-h-[120px]">
+      <span className="text-sm">Select Run {side}</span>
+    </div>
+  );
+
+  if (isLoading) return <Skeleton className="h-[120px] rounded-xl" />;
+  if (!run) return (
+    <div className="instrument-tile rounded-xl p-6 text-destructive text-sm">
+      Run not found: <span className="font-mono">{runId.slice(0, 16)}</span>
+    </div>
+  );
+
+  const elapsed = run.started_at
+    ? ((run.finished_at ? new Date(run.finished_at) : new Date()).getTime() - new Date(run.started_at).getTime())
+    : 0;
+
+  return (
+    <div className={cn("instrument-tile rounded-xl p-4 space-y-3 border", side === "A" ? "border-primary/30" : "border-accent/60")}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-semibold text-sm truncate">{run.name || "Unnamed"}</div>
+          <div className="font-mono text-[10px] text-muted-foreground">{run.id.slice(0, 20)}</div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Badge variant="outline" className="h-5 text-[9px] px-1.5 font-semibold">{side}</Badge>
+          <RunStateBadge status={run.status as RunStatus} />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <div className="text-xs text-muted-foreground">Total</div>
+          <div className="text-lg font-bold font-technical">{total}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">Pass%</div>
+          <div className={cn("text-lg font-bold font-technical", passRate >= 80 ? "text-status-pass" : "text-status-fail")}>
+            {passRate}%
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">Duration</div>
+          <div className="text-sm font-bold font-technical">{formatDuration(elapsed)}</div>
+        </div>
+      </div>
+      {run.started_at && (
+        <div className="text-[10px] text-muted-foreground">{formatRelativeTime(run.started_at)}</div>
+      )}
+    </div>
+  );
 }
 
-export default function ComparePage() {
+// ─── Diff table ───────────────────────────────────────────────────────────────
+
+function DiffTable({ runIdA, runIdB }: { runIdA: string; runIdB: string }) {
+  const { data: compareData, isLoading } = useRunCompare(runIdA, runIdB);
+
+  if (isLoading) return (
+    <div className="space-y-2 p-3">
+      {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8" />)}
+    </div>
+  );
+
+  if (!compareData) return (
+    <div className="p-8 text-center text-sm text-muted-foreground">
+      Enter both run IDs above to see a comparison
+    </div>
+  );
+
+  const rows = compareData.results ?? [];
+
+  if (rows.length === 0) {
     return (
-        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-            <CompareContent />
-        </Suspense>
+      <div className="p-8 text-center text-sm text-muted-foreground">
+        No overlapping tests found between these runs
+      </div>
     );
+  }
+
+  return (
+    <ScrollArea className="h-[480px]">
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 bg-card/95 backdrop-blur-sm">
+          <tr className="border-b border-border/40">
+            <th className="py-2 pl-3 text-left text-[10px] uppercase tracking-wider text-muted-foreground">Test</th>
+            <th className="py-2 text-center text-[10px] uppercase tracking-wider text-muted-foreground">Run A</th>
+            <th className="py-2 text-center text-[10px] uppercase tracking-wider text-muted-foreground">Run B</th>
+            <th className="py-2 pr-3 text-center text-[10px] uppercase tracking-wider text-muted-foreground">Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row: { test_id: string; status_a: string; status_b: string; changed: boolean }, i: number) => {
+            const changed = row.status_a !== row.status_b;
+            return (
+              <tr key={i} className={cn("border-b border-border/20 hover:bg-accent/10 transition-colors", changed && "bg-amber-500/5")}>
+                <td className="py-1.5 pl-3 font-mono">{row.test_id}</td>
+                <td className="py-1.5 text-center">
+                  <StatusBadge status={row.status_a as Status} />
+                </td>
+                <td className="py-1.5 text-center">
+                  <StatusBadge status={row.status_b as Status} />
+                </td>
+                <td className="py-1.5 pr-3 text-center">
+                  {changed
+                    ? <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium text-[10px]">
+                        <ArrowRight className="h-2.5 w-2.5" /> Changed
+                      </span>
+                    : <span className="text-muted-foreground/40">—</span>
+                  }
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </ScrollArea>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function CompareRunsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [runIdA, setRunIdA] = React.useState(searchParams.get("a") ?? "");
+  const [runIdB, setRunIdB] = React.useState(searchParams.get("b") ?? "");
+
+  const canCompare = runIdA.trim().length > 0 && runIdB.trim().length > 0;
+
+  function doCompare() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("a", runIdA.trim());
+    url.searchParams.set("b", runIdB.trim());
+    router.replace(url.pathname + url.search);
+  }
+
+  return (
+    <motion.div
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="space-y-6"
+    >
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
+          <Link href="/runs"><ArrowLeft className="h-4 w-4" /></Link>
+        </Button>
+        <div>
+          <h1 className="text-xl font-bold">Compare Runs</h1>
+          <p className="text-sm text-muted-foreground">Side-by-side diff of two test runs</p>
+        </div>
+      </div>
+
+      {/* Run ID selectors */}
+      <SectionCard title="Select runs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <RunSelector value={runIdA} onChange={setRunIdA} label="Run A (baseline)" />
+          <RunSelector value={runIdB} onChange={setRunIdB} label="Run B (comparison)" />
+        </div>
+        <div className="mt-3 flex justify-end">
+          <Button size="sm" onClick={doCompare} disabled={!canCompare} className="gap-1.5">
+            <GitCompare className="h-4 w-4" /> Compare
+          </Button>
+        </div>
+      </SectionCard>
+
+      {/* Summary cards */}
+      {(runIdA || runIdB) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <RunSummaryCard runId={runIdA} side="A" />
+          <RunSummaryCard runId={runIdB} side="B" />
+        </div>
+      )}
+
+      {/* Diff table */}
+      {canCompare && (
+        <SectionCard title="Test-level diff" noPadding>
+          <DiffTable runIdA={runIdA.trim()} runIdB={runIdB.trim()} />
+        </SectionCard>
+      )}
+    </motion.div>
+  );
 }

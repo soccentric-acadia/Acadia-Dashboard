@@ -1,228 +1,242 @@
 "use client";
 
-import React, { use, useState, useMemo } from "react";
+import * as React from "react";
 import Link from "next/link";
+import { use } from "react";
+import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { getModuleRegistry } from "@/lib/proto/registry";
-import { getModuleLabel, formatRelativeTime, formatDurationNs } from "@/lib/utils";
+import { getModuleLabel, formatRelativeTime, formatDurationNs, cn } from "@/lib/utils";
 import { useModuleResults, useModuleTrend } from "@/lib/api/queries";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ModuleIcon } from "@/components/primitives/module-icon";
+import { LiveDot } from "@/components/primitives/live-dot";
+import { Sparkline } from "@/components/primitives/sparkline";
+import { SectionCard } from "@/components/primitives/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ResultTable } from "@/components/results/result-table";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine,
+} from "recharts";
+import {
+  ArrowLeft, AlertCircle, TrendingUp, Clock, CheckCircle2, XCircle,
+} from "lucide-react";
 import { isFailureStatus } from "@/lib/status";
 import { numericKeys } from "@/lib/value/typed";
-import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartTooltip,
-    ResponsiveContainer, Legend,
-} from "recharts";
-import { ArrowLeft, AlertCircle, TrendingUp } from "lucide-react";
 import type { Status, TestResult } from "@/lib/api/types";
+import { pageVariants } from "@/components/motion/presets";
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function lastDotState(results: TestResult[]): import("@/components/primitives/live-dot").LiveDotState {
+  const last = results.at(-1);
+  if (!last) return "never";
+  const s = last.status as Status;
+  if (s === "PASS") return "pass";
+  if (s === "FAIL") return "fail";
+  if (s === "ERROR") return "error";
+  if (s === "TIMEOUT") return "timeout";
+  if (s === "SKIPPED") return "skipped";
+  if (s === "ABORTED") return "aborted";
+  return "idle";
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ModuleDetailPage({ params }: { params: Promise<{ moduleId: string }> }) {
-    const { moduleId } = use(params);
-    const { data: modules, isLoading: modulesLoading } = useQuery({
-        queryKey: ["modules"],
-        queryFn: getModuleRegistry,
-        staleTime: Infinity,
-    });
+  const { moduleId } = use(params);
 
-    const { data: resultsPage, isLoading: resultsLoading } = useModuleResults(moduleId, { limit: 200 });
-    const results = resultsPage?.results ?? [];
+  const { data: modules, isLoading: modulesLoading } = useQuery({
+    queryKey: ["modules"],
+    queryFn: getModuleRegistry,
+    staleTime: Infinity,
+  });
 
-    const mod = modules?.find((m) => m.id === moduleId);
+  const { data: resultsPage, isLoading: resultsLoading } = useModuleResults(moduleId, { limit: 200 });
+  const { data: trendPage } = useModuleTrend(moduleId, 30);
 
-    if (modulesLoading || resultsLoading) return (
-        <div className="space-y-4">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-64 w-full" />
-        </div>
-    );
+  const results = resultsPage?.results ?? [];
+  const trendData = trendPage?.results ?? [];
 
-    if (!mod && !modulesLoading) return (
-        <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <span>Module not found: {moduleId}</span>
-        </div>
-    );
+  const mod = modules?.find((m) => m.id === moduleId);
+  const label = getModuleLabel(moduleId);
 
-    const passCount = results.filter((r) => r.status === "PASS").length;
-    const failCount = results.filter((r) => isFailureStatus(r.status as Status)).length;
-    const totalCount = results.length;
-    const mKeys = numericKeys(results, "metrics");
+  // KPIs
+  const totalRuns = results.length;
+  const passed = results.filter((r) => r.status === "PASS").length;
+  const failed = results.filter((r) => isFailureStatus(r.status as Status)).length;
+  const passRate = totalRuns > 0 ? Math.round((passed / totalRuns) * 100) : 0;
 
+  // Sparkline data (pass=1, fail=0) from recent results
+  const trendSeries = results.slice(-30).map((r) => (r.status === "PASS" ? 1 : 0));
+
+  // Recharts trend series for the chart tab
+  const chartData = trendData.map((r, i) => ({
+    index: i + 1,
+    status: r.status === "PASS" ? 1 : 0,
+    duration: r.duration_ns ? r.duration_ns / 1_000_000 : null,
+  }));
+
+  // Numeric measurement keys for mini charts
+  const numericFields = results.length > 0 ? numericKeys(results[0].values ?? {}) : [];
+
+  const isLoading = modulesLoading || resultsLoading;
+
+  const dotState = lastDotState(results);
+
+  if (isLoading) {
     return (
-        <div className="space-y-6">
-            <div className="flex items-center gap-4 flex-wrap">
-                <Button variant="ghost" size="sm" asChild>
-                    <Link href="/modules"><ArrowLeft className="mr-2 h-4 w-4" />Modules</Link>
-                </Button>
-                <h1 className="text-xl font-bold">{mod ? getModuleLabel(mod.id) : moduleId}</h1>
-                {mod && <Badge variant="outline" className="font-mono text-xs">{mod.id}</Badge>}
-                {mod?.version && <Badge variant="secondary" className="text-xs">v{mod.version}</Badge>}
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard label="Total results" value={String(totalCount)} />
-                <StatCard label="Pass" value={<span className="text-green-600 dark:text-green-400">{passCount}</span>} />
-                <StatCard label="Fail / Error" value={<span className={failCount > 0 ? "text-red-500" : ""}>{failCount}</span>} />
-                <StatCard label="Pass rate" value={totalCount > 0 ? `${Math.round(passCount / totalCount * 100)}%` : "—"} />
-            </div>
-
-            <Tabs defaultValue="results">
-                <TabsList>
-                    <TabsTrigger value="results">Results ({totalCount})</TabsTrigger>
-                    <TabsTrigger value="trend" disabled={mKeys.length === 0}>Trend</TabsTrigger>
-                    <TabsTrigger value="heatmap" disabled={results.length === 0}>Heatmap</TabsTrigger>
-                </TabsList>
-                <TabsContent value="results" className="mt-4">
-                    {results.length === 0
-                        ? <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No results recorded for this module.</CardContent></Card>
-                        : <ResultTable results={results} />}
-                </TabsContent>
-                <TabsContent value="trend" className="mt-4">
-                    <TrendTab moduleId={moduleId} metricKeys={mKeys} />
-                </TabsContent>
-                <TabsContent value="heatmap" className="mt-4">
-                    <HeatmapTab results={results} />
-                </TabsContent>
-            </Tabs>
+      <div className="space-y-6 p-1">
+        <Skeleton className="h-12 w-72" />
+        <div className="grid grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-lg" />)}
         </div>
+        <Skeleton className="h-64 rounded-lg" />
+      </div>
     );
-}
+  }
 
-function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
-    return (
-        <Card>
-            <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">{label}</CardTitle></CardHeader>
-            <CardContent><div className="text-sm font-medium">{value}</div></CardContent>
-        </Card>
-    );
-}
-
-// ── Trend tab ────────────────────────────────────────────────────────────
-
-const CHART_COLORS = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2"];
-
-function TrendTab({ moduleId, metricKeys }: { moduleId: string; metricKeys: string[] }) {
-    const [selectedKey, setSelectedKey] = useState(metricKeys[0] ?? "");
-    const { data: trend, isLoading } = useModuleTrend(moduleId, "*", selectedKey, "metrics");
-
-    const chartData = useMemo(() => {
-        if (!trend?.points) return [];
-        return trend.points.map((pt) => ({ run: pt.run_name ?? pt.run_id.slice(0, 8), value: pt.value }));
-    }, [trend]);
-
-    if (metricKeys.length === 0) return (
-        <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No numeric metrics available.</CardContent></Card>
-    );
-
-    return (
-        <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-                {metricKeys.map((k) => (
-                    <Button key={k} variant={selectedKey === k ? "default" : "outline"} size="sm" onClick={() => setSelectedKey(k)}>
-                        <TrendingUp className="mr-1.5 h-3.5 w-3.5" />{k}
-                    </Button>
-                ))}
-            </div>
-            <Card>
-                <CardHeader><CardTitle className="text-sm">{selectedKey} over runs</CardTitle></CardHeader>
-                <CardContent>
-                    {isLoading
-                        ? <Skeleton className="h-48 w-full" />
-                        : chartData.length === 0
-                            ? <p className="text-xs text-center text-muted-foreground py-8">No trend data.</p>
-                            : (
-                                <ResponsiveContainer width="100%" height={240}>
-                                    <LineChart data={chartData}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="run" tick={{ fontSize: 9 }} />
-                                        <YAxis tick={{ fontSize: 10 }} />
-                                        <RechartTooltip contentStyle={{ fontSize: 11 }} />
-                                        <Line type="monotone" dataKey="value" name={selectedKey} stroke={CHART_COLORS[0]} dot={{ r: 3 }} />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            )
-                    }
-                </CardContent>
-            </Card>
+  return (
+    <motion.div
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="space-y-6"
+    >
+      {/* ── Header ── */}
+      <div className="flex items-start gap-4">
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
+          <Link href="/modules"><ArrowLeft className="h-4 w-4" /></Link>
+        </Button>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="h-10 w-10 rounded-lg instrument-tile flex items-center justify-center shrink-0">
+            <ModuleIcon moduleId={moduleId} size="md" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold truncate">{label}</h1>
+            <p className="font-mono text-xs text-muted-foreground">{moduleId}</p>
+          </div>
+          <div className="ml-auto flex items-center gap-3 shrink-0">
+            <LiveDot state={dotState} size="md" />
+            <Sparkline data={trendSeries} width={80} height={24} />
+            {results.at(-1) && (
+              <StatusBadge status={results.at(-1)!.status as Status} />
+            )}
+          </div>
         </div>
-    );
-}
+      </div>
 
-// ── Heatmap tab ─────────────────────────────────────────────────────────
+      {/* ── KPI row ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="instrument-tile rounded-lg p-3 space-y-0.5">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Runs</div>
+          <div className="text-2xl font-bold font-technical">{totalRuns}</div>
+        </div>
+        <div className="instrument-tile rounded-lg p-3 space-y-0.5">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Pass Rate</div>
+          <div className={cn("text-2xl font-bold font-technical", passRate >= 80 ? "text-status-pass" : passRate >= 50 ? "text-status-timeout" : "text-status-fail")}>
+            {passRate}%
+          </div>
+        </div>
+        <div className="instrument-tile rounded-lg p-3 space-y-0.5">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Passed</div>
+          <div className="text-2xl font-bold font-technical text-status-pass">{passed}</div>
+        </div>
+        <div className="instrument-tile rounded-lg p-3 space-y-0.5">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Failures</div>
+          <div className="text-2xl font-bold font-technical text-status-fail">{failed}</div>
+        </div>
+      </div>
 
-const STATUS_HEATMAP_COLOR: Record<string, string> = {
-    PASS:    "bg-green-500",
-    FAIL:    "bg-red-500",
-    ERROR:   "bg-red-700",
-    TIMEOUT: "bg-amber-500",
-    SKIPPED: "bg-muted",
-    ABORTED: "bg-purple-500",
-};
+      {/* ── Tabs ── */}
+      <Tabs defaultValue="results">
+        <TabsList className="h-8">
+          <TabsTrigger value="results" className="text-xs h-7">Results</TabsTrigger>
+          <TabsTrigger value="trend" className="text-xs h-7">Trend</TabsTrigger>
+          {numericFields.length > 0 && (
+            <TabsTrigger value="measurements" className="text-xs h-7">Measurements</TabsTrigger>
+          )}
+        </TabsList>
 
-function HeatmapTab({ results }: { results: TestResult[] }) {
-    // Group by run_id rows, test_id columns
-    const { runIds, testIds, grid } = useMemo(() => {
-        const runSet = new Set<string>();
-        const testSet = new Set<string>();
-        for (const r of results) { runSet.add(r.run_id); testSet.add(r.test_id); }
-        const rIds = Array.from(runSet);
-        const tIds = Array.from(testSet);
-        const g = new Map<string, Map<string, string>>();
-        for (const r of results) {
-            const row = g.get(r.run_id) ?? new Map<string, string>();
-            row.set(r.test_id, r.status);
-            g.set(r.run_id, row);
-        }
-        return { runIds: rIds, testIds: tIds, grid: g };
-    }, [results]);
+        {/* Results table */}
+        <TabsContent value="results" className="mt-4">
+          <SectionCard title={`Results (${results.length})`} noPadding>
+            {results.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+                <AlertCircle className="h-8 w-8 opacity-40" />
+                <p className="text-sm">No results recorded for this module</p>
+              </div>
+            ) : (
+              <ResultTable results={results} />
+            )}
+          </SectionCard>
+        </TabsContent>
 
-    if (runIds.length === 0) return (
-        <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No data.</CardContent></Card>
-    );
+        {/* Trend chart */}
+        <TabsContent value="trend" className="mt-4">
+          <SectionCard title="Pass/Fail Trend (last 30 runs)">
+            {chartData.length < 2 ? (
+              <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+                <TrendingUp className="h-8 w-8 opacity-40" />
+                <p className="text-sm">Not enough data for trend analysis</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
+                  <XAxis dataKey="index" tick={{ fontSize: 10 }} className="fill-muted-foreground" />
+                  <YAxis domain={[0, 1]} tickFormatter={(v) => v === 1 ? "P" : "F"} tick={{ fontSize: 10 }} className="fill-muted-foreground" />
+                  <Tooltip
+                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 11 }}
+                    formatter={(v: number) => v === 1 ? ["PASS", "Status"] : ["FAIL", "Status"]}
+                  />
+                  <ReferenceLine y={0.5} stroke="hsl(var(--border))" strokeDasharray="4 2" />
+                  <Line
+                    type="step"
+                    dataKey="status"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={false}
+                    name="Status"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </SectionCard>
+        </TabsContent>
 
-    return (
-        <div className="overflow-x-auto">
-            <table className="text-xs border-separate border-spacing-0.5">
-                <thead>
-                    <tr>
-                        <th className="px-2 text-left text-muted-foreground">Run</th>
-                        {testIds.map((tid) => (
-                            <th key={tid} className="px-1 font-mono text-muted-foreground max-w-[60px] truncate" title={tid}>
-                                {tid.slice(0, 8)}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {runIds.map((runId) => (
-                        <tr key={runId}>
-                            <td className="pr-2 font-mono text-muted-foreground">{runId.slice(0, 8)}</td>
-                            {testIds.map((tid) => {
-                                const status = grid.get(runId)?.get(tid);
-                                return (
-                                    <td key={tid} title={status ?? "no data"}>
-                                        <div className={`h-4 w-4 rounded-sm ${status ? (STATUS_HEATMAP_COLOR[status] ?? "bg-muted") : "bg-muted/30"}`} />
-                                    </td>
-                                );
-                            })}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            <div className="mt-3 flex flex-wrap gap-3">
-                {Object.entries(STATUS_HEATMAP_COLOR).map(([s, cls]) => (
-                    <div key={s} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <div className={`h-3 w-3 rounded-sm ${cls}`} />{s}
+        {/* Measurements */}
+        {numericFields.length > 0 && (
+          <TabsContent value="measurements" className="mt-4">
+            <SectionCard title="Numeric Measurements">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {numericFields.slice(0, 9).map((key) => {
+                  const vals = results
+                    .map((r) => {
+                      const v = r.values?.[key];
+                      return typeof v === "number" ? v : typeof v === "string" ? parseFloat(v) : NaN;
+                    })
+                    .filter((v) => !isNaN(v));
+                  return (
+                    <div key={key} className="instrument-tile rounded-lg p-3 space-y-1">
+                      <div className="text-[10px] font-mono text-muted-foreground truncate">{key}</div>
+                      <div className="text-lg font-bold font-technical">
+                        {vals.at(-1)?.toFixed(3) ?? "—"}
+                      </div>
+                      <Sparkline data={vals.slice(-20)} width={80} height={18} />
                     </div>
-                ))}
-            </div>
-        </div>
-    );
+                  );
+                })}
+              </div>
+            </SectionCard>
+          </TabsContent>
+        )}
+      </Tabs>
+    </motion.div>
+  );
 }

@@ -1,85 +1,84 @@
 "use client";
-
+import * as React from "react";
 import Link from "next/link";
+import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
-import { getModuleRegistry } from "@/lib/proto/registry";
+import { getModuleRegistry, getCategoryForModule } from "@/lib/proto/registry";
 import { getModuleLabel } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ModuleIcon } from "@/components/primitives/module-icon";
+import { LiveDot } from "@/components/primitives/live-dot";
 import { Input } from "@/components/ui/input";
-import { Boxes, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { Search } from "lucide-react";
+import { pageVariants, listItemVariants } from "@/components/motion/presets";
+import type { ModuleInfo } from "@/lib/proto/registry";
+import { cn } from "@/lib/utils";
 
 export default function ModulesPage() {
-    const [search, setSearch] = useState("");
-    const { data: modules, isLoading, isError, error, refetch } = useQuery({
-        queryKey: ["modules"],
-        queryFn: getModuleRegistry,
-        staleTime: Infinity,
-    });
+  const [filter, setFilter] = React.useState("");
+  const { data: modules = [], isLoading } = useQuery({
+    queryKey: ["modules"],
+    queryFn: getModuleRegistry,
+    staleTime: Infinity,
+  });
 
-    const filtered = modules?.filter((m) =>
-        m.id.includes(search.toLowerCase()) ||
-        getModuleLabel(m.id).toLowerCase().includes(search.toLowerCase())
-    );
+  const filtered = React.useMemo(() => {
+    const q = filter.toLowerCase();
+    if (!q) return modules;
+    return modules.filter((m) => m.id.toLowerCase().includes(q) || getModuleLabel(m.id).toLowerCase().includes(q));
+  }, [modules, filter]);
 
-    return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">Module Catalog</h1>
-                <span className="text-sm text-muted-foreground">
-                    {modules ? `${modules.length} modules` : ""}
-                </span>
-            </div>
+  const grouped = React.useMemo(() => {
+    const map = new Map<string, ModuleInfo[]>();
+    for (const m of filtered) {
+      const cat = getCategoryForModule(m);
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(m);
+    }
+    return map;
+  }, [filtered]);
 
-            <Input
-                placeholder="Search modules…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="max-w-sm"
-            />
-
-            {isError && (
-                <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <span>{(error as Error)?.message}</span>
-                    <Button size="sm" variant="destructive" className="ml-auto" onClick={() => refetch()}>Retry</Button>
-                </div>
-            )}
-
-            {isLoading ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {[...Array(9)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
-                </div>
-            ) : !filtered?.length ? (
-                <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-                    <Boxes className="h-12 w-12" />
-                    <p>{search ? "No modules match your search" : "No modules found"}</p>
-                </div>
-            ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {filtered.map((m) => (
-                        <Link key={m.id} href={`/modules/${m.id}`}>
-                            <Card className="cursor-pointer transition-shadow hover:shadow-md">
-                                <CardContent className="p-4">
-                                    <div className="flex items-start justify-between">
-                                        <div>
-                                            <div className="font-medium">{getModuleLabel(m.id)}</div>
-                                            <div className="font-mono text-xs text-muted-foreground mt-0.5">{m.id}</div>
-                                        </div>
-                                        <Badge variant={m.status === "active" ? "success" : "secondary"} className="shrink-0">
-                                            {m.status}
-                                        </Badge>
-                                    </div>
-                                    <div className="mt-2 text-xs text-muted-foreground">v{m.version}</div>
-                                </CardContent>
-                            </Card>
-                        </Link>
-                    ))}
-                </div>
-            )}
+  return (
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-5">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold">Hardware Modules</h1>
+          <p className="text-sm text-muted-foreground">{modules.length} modules in inventory</p>
         </div>
-    );
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search…" className="h-8 pl-8 text-sm w-48 font-mono" />
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground p-8 text-center">Loading modules…</div>
+      ) : (
+        <div className="space-y-6">
+          {Array.from(grouped.entries()).map(([cat, mods]) => (
+            <div key={cat}>
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">{cat}</div>
+              <motion.div
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2"
+                initial="hidden"
+                animate="visible"
+                variants={{ visible: { transition: { staggerChildren: 0.03 } } }}
+              >
+                {mods.map((m) => (
+                  <motion.div key={m.id} variants={listItemVariants}>
+                    <Link href={`/modules/${m.id}`}>
+                      <div className="instrument-tile rounded-lg p-3 flex flex-col items-center gap-2 text-center cursor-pointer hover:border-primary/40 transition-colors group">
+                        <ModuleIcon moduleId={m.id} size="md" className="text-muted-foreground group-hover:text-foreground transition-colors" />
+                        <span className="font-mono text-[10px] leading-tight">{getModuleLabel(m.id)}</span>
+                        <LiveDot state="never" size="xs" />
+                      </div>
+                    </Link>
+                  </motion.div>
+                ))}
+              </motion.div>
+            </div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
 }

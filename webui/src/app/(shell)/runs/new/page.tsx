@@ -1,497 +1,428 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { motion, AnimatePresence } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getModuleRegistry, getModuleLabel, getCategoryForModule } from "@/lib/proto/registry";
-import { useBoard } from "@/lib/board/context";
-import { useCreateConfig, useCreateRun } from "@/lib/api/queries";
-import type { ModuleConfig } from "@/lib/api/types";
-import type { TestMode } from "@/lib/api/types";
+import { useCreateRun, useConfigs } from "@/lib/api/queries";
+import { ModuleIcon } from "@/components/primitives/module-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-    Check, Clock, Eye, Zap, Search, ChevronRight, ChevronLeft,
-    Boxes, Play, AlertCircle,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ModuleInfo } from "@/lib/proto/registry";
+import type { TestMode } from "@/lib/api/types";
+import {
+  Check, ChevronRight, ChevronLeft, Play, Clock, Eye, Zap,
+  Boxes, Search, AlertCircle, FileText,
+} from "lucide-react";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ─── Schema ───────────────────────────────────────────────────────────────────
+
+const schema = z.object({
+  name: z.string().min(1, "Name is required"),
+  mode: z.enum(["single_shot", "long_term", "monitoring", "event_based"]),
+  module_id: z.string().min(1, "Select a module"),
+  config_id: z.string().optional(),
+  iterations: z.coerce.number().min(1).default(1),
+  duration_s: z.coerce.number().min(0).default(0),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+// ─── Step definitions ─────────────────────────────────────────────────────────
 
 type Step = "basics" | "mode" | "module" | "config" | "review";
+const STEPS: Step[] = ["basics", "mode", "module", "config", "review"];
 
-const STEPS: Array<{ id: Step; label: string }> = [
-    { id: "basics", label: "Basics" },
-    { id: "mode", label: "Mode" },
-    { id: "module", label: "Module" },
-    { id: "config", label: "Config" },
-    { id: "review", label: "Review" },
+const MODE_OPTIONS: { value: TestMode; label: string; description: string; icon: React.ElementType }[] = [
+  { value: "single_shot", label: "Single Shot", description: "Run all tests once and collect results", icon: Zap },
+  { value: "long_term", label: "Long Term", description: "Repeated cycles over extended time period", icon: Clock },
+  { value: "monitoring", label: "Monitoring", description: "Continuous passive monitoring without assertions", icon: Eye },
+  { value: "event_based", label: "Event Based", description: "Triggered by external hardware events", icon: Boxes },
 ];
 
-const MODES: Array<{
-    value: TestMode;
-    label: string;
-    description: string;
-    icon: React.ComponentType<{ className?: string }>;
-}> = [
-        { value: "single_shot", label: "Single Shot", description: "Run the module once and return one result.", icon: Check },
-        { value: "long_term", label: "Long Term", description: "Run at a fixed interval for a set duration.", icon: Clock },
-        { value: "monitoring", label: "Monitoring", description: "Continuously collect monitoring data.", icon: Eye },
-        { value: "event_based", label: "Event Based", description: "Poll and fire when a condition is met.", icon: Zap },
-    ];
+// ─── Step indicator ───────────────────────────────────────────────────────────
 
-// ── Zod schemas ───────────────────────────────────────────────────────────────
-
-const basicsSchema = z.object({
-    runName: z.string().min(1, "Run name is required"),
-    description: z.string().optional(),
-    tags: z.string().optional(),
-});
-
-
-const configSchema = z.object({
-    interval_ms: z.preprocess((v) => (v === "" || v === undefined ? undefined : Number(v)), z.number().int().min(100).optional()),
-    duration_ms: z.preprocess((v) => (v === "" || v === undefined ? undefined : Number(v)), z.number().int().min(0).optional()),
-    run_forever: z.boolean().optional(),
-    poll_interval_ms: z.preprocess((v) => (v === "" || v === undefined ? undefined : Number(v)), z.number().int().min(50).optional()),
-    monitor_items: z.string().optional(),
-    event_expression: z.string().optional(),
-    module_config_json: z.string().optional(),
-});
-
-type BasicsValues = z.infer<typeof basicsSchema>;
-type ConfigValues = z.infer<typeof configSchema>;
-
-// ── Step components ───────────────────────────────────────────────────────────
-
-function BasicsStep({ values, onChange }: {
-    values: BasicsValues;
-    onChange: (v: BasicsValues) => void;
-}) {
-    const form = useForm<BasicsValues>({
-        resolver: zodResolver(basicsSchema) as Resolver<BasicsValues>,
-        defaultValues: values,
-    });
-
-    const save = form.handleSubmit((v) => onChange(v));
-
-    return (
-        <div className="space-y-4" onBlur={() => { void save(); }}>
-            <div className="space-y-1.5">
-                <Label htmlFor="runName">Run name <span className="text-destructive">*</span></Label>
-                <Input id="runName" placeholder="e.g. Smoke test after reboot" {...form.register("runName")} />
-                {form.formState.errors.runName && (
-                    <p className="text-xs text-destructive">{form.formState.errors.runName.message}</p>
-                )}
+function StepIndicator({ current, total, labels }: { current: number; total: number; labels: string[] }) {
+  return (
+    <div className="flex items-center gap-0">
+      {labels.map((label, i) => (
+        <React.Fragment key={label}>
+          <div className="flex flex-col items-center gap-1">
+            <div className={cn(
+              "h-7 w-7 rounded-full border-2 flex items-center justify-center text-xs font-medium transition-all",
+              i < current ? "border-primary bg-primary text-primary-foreground" :
+              i === current ? "border-primary bg-primary/10 text-primary" :
+              "border-border bg-background text-muted-foreground"
+            )}>
+              {i < current ? <Check className="h-3.5 w-3.5" /> : <span>{i + 1}</span>}
             </div>
-            <div className="space-y-1.5">
-                <Label htmlFor="description">Description</Label>
-                <Input id="description" placeholder="Optional description" {...form.register("description")} />
-            </div>
-            <div className="space-y-1.5">
-                <Label htmlFor="tags">Tags</Label>
-                <Input id="tags" placeholder="smoke, regression, rc1 (comma separated)" {...form.register("tags")} />
-            </div>
-        </div>
-    );
+            <span className={cn(
+              "text-[10px] capitalize",
+              i === current ? "text-foreground font-medium" : "text-muted-foreground"
+            )}>
+              {label}
+            </span>
+          </div>
+          {i < total - 1 && (
+            <div className={cn("h-px flex-1 mx-2 mb-4 transition-all", i < current ? "bg-primary" : "bg-border")} />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ─── Steps ────────────────────────────────────────────────────────────────────
+
+function BasicsStep({ register, errors }: { register: ReturnType<typeof useForm<FormValues>>["register"]; errors: ReturnType<typeof useForm<FormValues>>["formState"]["errors"] }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+      className="space-y-4"
+    >
+      <div>
+        <h2 className="text-base font-semibold">Run basics</h2>
+        <p className="text-sm text-muted-foreground">Give your run a descriptive name</p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="name" className="text-xs">Run name</Label>
+        <Input
+          id="name"
+          {...register("name")}
+          placeholder="e.g. Overnight stress test — network"
+          className="font-mono"
+          autoFocus
+        />
+        {errors.name && (
+          <p className="text-xs text-destructive flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" />{errors.name.message}
+          </p>
+        )}
+      </div>
+    </motion.div>
+  );
 }
 
 function ModeStep({ value, onChange }: { value: TestMode; onChange: (v: TestMode) => void }) {
-    return (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {MODES.map(({ value: v, label, description, icon: Icon }) => (
-                <button
-                    key={v}
-                    type="button"
-                    onClick={() => onChange(v)}
-                    className={cn(
-                        "flex items-start gap-3 rounded-lg border p-4 text-left transition-all hover:border-primary",
-                        value === v ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border"
-                    )}
-                >
-                    <Icon className={cn("h-5 w-5 mt-0.5 shrink-0", value === v ? "text-primary" : "text-muted-foreground")} />
-                    <div>
-                        <p className="font-medium text-sm">{label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-                    </div>
-                    {value === v && <Check className="h-4 w-4 text-primary ml-auto shrink-0" />}
-                </button>
-            ))}
-        </div>
-    );
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+      className="space-y-4"
+    >
+      <div>
+        <h2 className="text-base font-semibold">Test mode</h2>
+        <p className="text-sm text-muted-foreground">Choose how this run will execute</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {MODE_OPTIONS.map(({ value: v, label, description, icon: Icon }) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => onChange(v)}
+            className={cn(
+              "text-left rounded-lg border p-4 space-y-1.5 transition-all hover:border-primary/60",
+              value === v ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-border"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <Icon className={cn("h-4 w-4", value === v ? "text-primary" : "text-muted-foreground")} />
+              <span className="text-sm font-medium">{label}</span>
+              {value === v && <Check className="h-3.5 w-3.5 text-primary ml-auto" />}
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+          </button>
+        ))}
+      </div>
+    </motion.div>
+  );
 }
 
-function ModuleStep({
-    value,
-    onChange,
-}: {
-    value: string;
-    onChange: (id: string) => void;
-}) {
-    const [search, setSearch] = useState("");
-    const { data: modules } = useQuery({
-        queryKey: ["modules"],
-        queryFn: getModuleRegistry,
-        staleTime: Infinity,
-    });
+function ModuleStep({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const [filter, setFilter] = React.useState("");
+  const { data: modules = [], isLoading } = useQuery({
+    queryKey: ["modules"],
+    queryFn: getModuleRegistry,
+    staleTime: Infinity,
+  });
 
-    const filtered = (modules ?? []).filter((m) => {
-        const q = search.toLowerCase();
-        return m.id.includes(q) || getModuleLabel(m.id).toLowerCase().includes(q) || getCategoryForModule(m.id).toLowerCase().includes(q);
-    });
+  const filtered = React.useMemo(() => {
+    const q = filter.toLowerCase();
+    if (!q) return modules;
+    return modules.filter((m) => m.id.toLowerCase().includes(q) || getModuleLabel(m.id).toLowerCase().includes(q));
+  }, [modules, filter]);
 
-    const grouped = new Map<string, ModuleInfo[]>();
+  const grouped = React.useMemo(() => {
+    const map = new Map<string, ModuleInfo[]>();
     for (const m of filtered) {
-        const cat = getCategoryForModule(m.id);
-        if (!grouped.has(cat)) grouped.set(cat, []);
-        grouped.get(cat)!.push(m);
+      const cat = getCategoryForModule(m);
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(m);
     }
+    return map;
+  }, [filtered]);
 
-    return (
-        <div className="space-y-3">
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                    placeholder="Search modules…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
-                />
-            </div>
-
-            <div className="max-h-[360px] overflow-y-auto space-y-3 pr-1">
-                {Array.from(grouped.entries()).map(([cat, mods]) => (
-                    <div key={cat}>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 px-1">
-                            {cat}
-                        </p>
-                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                            {mods.map((m) => (
-                                <button
-                                    key={m.id}
-                                    type="button"
-                                    onClick={() => onChange(m.id)}
-                                    className={cn(
-                                        "flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-all hover:border-primary",
-                                        value === m.id
-                                            ? "border-primary bg-primary/5 font-medium"
-                                            : "border-border text-muted-foreground"
-                                    )}
-                                >
-                                    <Boxes className="h-3.5 w-3.5 shrink-0" />
-                                    <span className="truncate">{getModuleLabel(m.id)}</span>
-                                    {value === m.id && <Check className="h-3.5 w-3.5 text-primary ml-auto shrink-0" />}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+      className="space-y-4"
+    >
+      <div>
+        <h2 className="text-base font-semibold">Select module</h2>
+        <p className="text-sm text-muted-foreground">Choose the hardware module to test</p>
+      </div>
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Search modules…"
+          className="pl-8 h-8 text-sm font-mono"
+        />
+      </div>
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
+        </div>
+      ) : (
+        <div className="max-h-72 overflow-y-auto space-y-3 pr-1">
+          {Array.from(grouped.entries()).map(([cat, mods]) => (
+            <div key={cat}>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 px-1">{cat}</div>
+              <div className="space-y-1">
+                {mods.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => onChange(m.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all hover:border-primary/60",
+                      value === m.id ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-border/60"
+                    )}
+                  >
+                    <ModuleIcon moduleId={m.id} size="sm" className="text-muted-foreground shrink-0" />
+                    <span className="font-mono text-xs flex-1 truncate">{getModuleLabel(m.id)}</span>
+                    <span className="font-mono text-[9px] text-muted-foreground/60 truncate">{m.id}</span>
+                    {value === m.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                  </button>
                 ))}
-
-                {filtered.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-8">No modules match your search.</p>
-                )}
+              </div>
             </div>
+          ))}
         </div>
-    );
+      )}
+    </motion.div>
+  );
 }
 
-function ConfigStep({
-    mode,
-    values,
-    onChange,
-}: {
-    mode: TestMode;
-    values: ConfigValues;
-    onChange: (v: ConfigValues) => void;
-}) {
-    const form = useForm<ConfigValues>({
-        resolver: zodResolver(configSchema) as Resolver<ConfigValues>,
-        defaultValues: values,
-    });
-    const runForever = form.watch("run_forever");
+function ConfigStep({ value, onChange }: { value: string | undefined; onChange: (id: string) => void }) {
+  const { data: configsPage, isLoading } = useConfigs();
+  const configs = configsPage?.configs ?? [];
 
-    const save = form.handleSubmit((v) => onChange(v));
-
-    return (
-        <div className="space-y-4" onBlur={() => { void save(); }}>
-            {(mode === "long_term" || mode === "monitoring") && (
-                <>
-                    <div className="space-y-1.5">
-                        <Label>Interval (ms)</Label>
-                        <Input type="number" min={100} defaultValue={1000} {...form.register("interval_ms")} />
-                        <p className="text-xs text-muted-foreground">How often to sample, in milliseconds.</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="checkbox"
-                            id="run_forever"
-                            {...form.register("run_forever")}
-                            className="h-4 w-4"
-                        />
-                        <Label htmlFor="run_forever">Run indefinitely</Label>
-                    </div>
-                    {!runForever && (
-                        <div className="space-y-1.5">
-                            <Label>Duration (ms)</Label>
-                            <Input type="number" min={0} defaultValue={60000} {...form.register("duration_ms")} />
-                        </div>
-                    )}
-                </>
-            )}
-            {mode === "monitoring" && (
-                <div className="space-y-1.5">
-                    <Label>Monitor items</Label>
-                    <Input placeholder="temp, voltage, current (comma separated)" {...form.register("monitor_items")} />
-                </div>
-            )}
-            {mode === "event_based" && (
-                <>
-                    <div className="space-y-1.5">
-                        <Label>Poll interval (ms)</Label>
-                        <Input type="number" min={50} defaultValue={500} {...form.register("poll_interval_ms")} />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label>Event expression</Label>
-                        <Input placeholder="e.g. value > 90" {...form.register("event_expression")} />
-                        <p className="text-xs text-muted-foreground">Condition that triggers the event.</p>
-                    </div>
-                </>
-            )}
-            {mode === "single_shot" && (
-                <p className="text-sm text-muted-foreground">Single-shot runs have no timing configuration. The module runs once and returns a result.</p>
-            )}
-            <div className="space-y-1.5">
-                <Label>Module config (JSON)</Label>
-                <textarea
-                    className="w-full min-h-[120px] rounded-md border bg-background px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder='{"key": "value"}'
-                    {...form.register("module_config_json")}
-                />
-                <p className="text-xs text-muted-foreground">Module-specific configuration as JSON. Leave blank to use defaults.</p>
-            </div>
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+      className="space-y-4"
+    >
+      <div>
+        <h2 className="text-base font-semibold">Configuration (optional)</h2>
+        <p className="text-sm text-muted-foreground">Select an existing config or skip to use defaults</p>
+      </div>
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
-    );
+      ) : configs.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center space-y-2">
+          <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+          <p className="text-sm text-muted-foreground">No configurations available</p>
+          <Button variant="outline" size="sm" asChild>
+            <a href="/configs/new">Create config</a>
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className={cn(
+              "w-full text-left rounded-lg border px-3 py-2.5 transition-all hover:border-primary/60",
+              !value ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-border/60"
+            )}
+          >
+            <div className="text-sm font-medium">Use defaults</div>
+            <div className="text-xs text-muted-foreground">No config — run with module defaults</div>
+          </button>
+          {configs.map((cfg) => (
+            <button
+              key={cfg.id}
+              type="button"
+              onClick={() => onChange(cfg.id)}
+              className={cn(
+                "w-full text-left rounded-lg border px-3 py-2.5 transition-all hover:border-primary/60",
+                value === cfg.id ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-border/60"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium flex-1 truncate">{cfg.name}</span>
+                {value === cfg.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+              </div>
+              {cfg.description && <div className="text-xs text-muted-foreground truncate">{cfg.description}</div>}
+            </button>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
 }
 
-// ── Review step ───────────────────────────────────────────────────────────────
-
-function ReviewStep({
-    basics,
-    mode,
-    moduleId,
-    config,
-    boardHostname,
-}: {
-    basics: BasicsValues;
-    mode: TestMode;
-    moduleId: string;
-    config: ConfigValues;
-    boardHostname: string;
-}) {
-    const items: Array<{ label: string; value: string }> = [
-        { label: "Run name", value: basics.runName },
-        { label: "Board", value: boardHostname },
-        { label: "Module", value: getModuleLabel(moduleId) },
-        { label: "Mode", value: MODES.find((m) => m.value === mode)?.label ?? mode },
-    ];
-    if (config.interval_ms) items.push({ label: "Interval", value: `${config.interval_ms} ms` });
-    if (config.run_forever) items.push({ label: "Duration", value: "Indefinite" });
-    else if (config.duration_ms) items.push({ label: "Duration", value: `${config.duration_ms} ms` });
-    if (basics.description) items.push({ label: "Description", value: basics.description });
-    if (basics.tags) items.push({ label: "Tags", value: basics.tags });
-
-    return (
-        <div className="space-y-4">
-            <div className="rounded-lg border divide-y">
-                {items.map(({ label, value }) => (
-                    <div key={label} className="flex items-start justify-between gap-4 px-4 py-2.5">
-                        <span className="text-sm text-muted-foreground shrink-0">{label}</span>
-                        <span className="text-sm font-medium text-right">{value}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
+function ReviewStep({ values }: { values: FormValues }) {
+  const modeOption = MODE_OPTIONS.find((m) => m.value === values.mode);
+  const ModeIcon = modeOption?.icon ?? Zap;
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+      className="space-y-4"
+    >
+      <div>
+        <h2 className="text-base font-semibold">Review & launch</h2>
+        <p className="text-sm text-muted-foreground">Confirm details before starting the run</p>
+      </div>
+      <div className="rounded-lg border border-border/60 divide-y divide-border/40">
+        {[
+          { label: "Name", value: values.name },
+          { label: "Module", value: <span className="font-mono text-xs">{getModuleLabel(values.module_id)}</span> },
+          { label: "Mode", value: (
+            <span className="flex items-center gap-1.5">
+              <ModeIcon className="h-3.5 w-3.5 text-muted-foreground" />
+              {modeOption?.label ?? values.mode}
+            </span>
+          )},
+          { label: "Config", value: values.config_id || <span className="text-muted-foreground italic">defaults</span> },
+        ].map(({ label, value }) => (
+          <div key={label} className="flex items-center justify-between px-4 py-2.5 text-sm">
+            <span className="text-muted-foreground text-xs uppercase tracking-wide">{label}</span>
+            <span className="font-medium">{value}</span>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
 }
 
-// ── Main stepper page ─────────────────────────────────────────────────────────
-
-function NewRunContent() {
-    const router = useRouter();
-    const { board } = useBoard();
-
-    const [step, setStep] = useState<Step>("basics");
-    const [basics, setBasics] = useState<BasicsValues>({ runName: "", description: "", tags: "" });
-    const [mode, setMode] = useState<TestMode>("single_shot");
-    const [moduleId, setModuleId] = useState("");
-    const [config, setConfig] = useState<ConfigValues>({});
-
-    const createConfigMut = useCreateConfig();
-    const createRunMut = useCreateRun();
-
-    const currentIndex = STEPS.findIndex((s) => s.id === step);
-
-    const canAdvance = () => {
-        if (step === "basics") return basics.runName.trim().length > 0;
-        if (step === "module") return moduleId.length > 0;
-        return true;
-    };
-
-    const advance = () => {
-        const next = STEPS[currentIndex + 1];
-        if (next) setStep(next.id);
-    };
-
-    const back = () => {
-        const prev = STEPS[currentIndex - 1];
-        if (prev) setStep(prev.id);
-    };
-
-    const buildConfig = (): Record<string, unknown> => {
-        const cfg: Record<string, unknown> = {};
-        if (config.interval_ms) cfg.interval_ms = config.interval_ms;
-        if (config.run_forever) cfg.run_forever = true;
-        else if (config.duration_ms) cfg.duration_ms = config.duration_ms;
-        if (config.poll_interval_ms) cfg.poll_interval_ms = config.poll_interval_ms;
-        if (config.monitor_items) {
-            cfg.monitor_item_names = config.monitor_items.split(",").map((s) => s.trim()).filter(Boolean);
-        }
-        if (config.event_expression) cfg.event_expression = config.event_expression;
-        if (config.module_config_json?.trim()) {
-            try {
-                Object.assign(cfg, JSON.parse(config.module_config_json));
-            } catch {
-                // ignore malformed JSON
-            }
-        }
-        cfg._runName = basics.runName;
-        if (basics.description) cfg._description = basics.description;
-        if (basics.tags) cfg._tags = basics.tags.split(",").map((t) => t.trim()).filter(Boolean);
-        return cfg;
-    };
-
-    const handleStart = async () => {
-        if (!board) { toast.error("No board configured"); return; }
-        try {
-            const cfgPayload = buildConfig();
-            const modules: ModuleConfig[] = [{ id: moduleId, enabled: true, config_payload: cfgPayload, notes: "" }];
-            const testConfig = await createConfigMut.mutateAsync({
-                name: basics.runName,
-                mode,
-                modules,
-                common_config: cfgPayload,
-            });
-            const run = await createRunMut.mutateAsync({
-                config_id: testConfig.id,
-                mode,
-                name: basics.runName,
-                notes: basics.description,
-                tags: basics.tags ? basics.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
-            });
-            router.push(`/runs/${run.id}`);
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Failed to start run");
-        }
-    };
-
-    const isLaunching = createConfigMut.isPending || createRunMut.isPending;
-
-    return (
-        <div className="mx-auto max-w-2xl space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight">New Run</h1>
-                <p className="text-muted-foreground text-sm mt-1">Configure and start a new test run on your board.</p>
-            </div>
-
-            {/* Stepper */}
-            <div className="flex items-center gap-0">
-                {STEPS.map(({ id, label }, i) => {
-                    const done = STEPS.findIndex((s) => s.id === step) > i;
-                    const active = id === step;
-                    return (
-                        <div key={id} className="flex items-center gap-0">
-                            <div className="flex flex-col items-center gap-1">
-                                <div className={cn(
-                                    "flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors",
-                                    done ? "border-primary bg-primary text-primary-foreground"
-                                        : active ? "border-primary text-primary"
-                                            : "border-muted text-muted-foreground"
-                                )}>
-                                    {done ? <Check className="h-4 w-4" /> : i + 1}
-                                </div>
-                                <span className={cn("text-xs", active ? "text-foreground font-medium" : "text-muted-foreground")}>{label}</span>
-                            </div>
-                            {i < STEPS.length - 1 && (
-                                <div className={cn("h-0.5 w-10 sm:w-16 mx-1 mt-[-14px]", done ? "bg-primary" : "bg-border")} />
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Step content */}
-            <Card>
-                <CardContent className="pt-6">
-                    {!board && (
-                        <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive mb-4">
-                            <AlertCircle className="h-4 w-4 shrink-0" />
-                            No board configured. <a href="/settings" className="underline ml-1">Add a board first.</a>
-                        </div>
-                    )}
-
-                    {step === "basics" && <BasicsStep values={basics} onChange={setBasics} />}
-                    {step === "mode" && <ModeStep value={mode} onChange={setMode} />}
-                    {step === "module" && <ModuleStep value={moduleId} onChange={setModuleId} />}
-                    {step === "config" && <ConfigStep mode={mode} values={config} onChange={setConfig} />}
-                    {step === "review" && (
-                        <ReviewStep
-                            basics={basics}
-                            mode={mode}
-                            moduleId={moduleId}
-                            config={config}
-                            boardHostname={board?.name || board?.hostname || "—"}
-                        />
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Navigation */}
-            <div className="flex items-center justify-between gap-3">
-                <Button variant="outline" onClick={back} disabled={currentIndex === 0}>
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Back
-                </Button>
-
-                <div className="flex items-center gap-2">
-                    {step === "review" ? (
-                        <Button onClick={handleStart} disabled={!board || isLaunching}>
-                            <Play className="h-4 w-4 mr-1.5" />
-                            {isLaunching ? "Starting…" : "Start now"}
-                        </Button>
-                    ) : (
-                        <Button onClick={advance} disabled={!canAdvance()}>
-                            Next
-                            <ChevronRight className="h-4 w-4 ml-1" />
-                        </Button>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NewRunPage() {
-    return (
-        <Suspense fallback={<div className="p-4"><Skeleton className="h-8 w-40" /></div>}>
-            <NewRunContent />
-        </Suspense>
-    );
+  const router = useRouter();
+  const [stepIdx, setStepIdx] = React.useState(0);
+  const currentStep = STEPS[stepIdx];
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: "", mode: "single_shot", module_id: "", iterations: 1, duration_s: 0 },
+  });
+
+  const values = watch();
+  const createRun = useCreateRun();
+
+  function canAdvance() {
+    if (currentStep === "basics") return values.name.trim().length > 0;
+    if (currentStep === "mode") return !!values.mode;
+    if (currentStep === "module") return values.module_id.length > 0;
+    return true;
+  }
+
+  async function onSubmit(data: FormValues) {
+    try {
+      const run = await createRun.mutateAsync({
+        name: data.name,
+        mode: data.mode,
+        module_id: data.module_id,
+        config_id: data.config_id || undefined,
+        iterations: data.iterations,
+        duration_s: data.duration_s || undefined,
+      });
+      toast.success("Run started!");
+      router.push(`/runs/${run.id}`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to start run");
+    }
+  }
+
+  const stepLabels = STEPS.map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+
+  return (
+    <div className="max-w-lg mx-auto py-4 space-y-6">
+      <div>
+        <h1 className="text-xl font-bold">New Run</h1>
+        <p className="text-sm text-muted-foreground">Configure and launch a hardware test run</p>
+      </div>
+
+      <StepIndicator current={stepIdx} total={STEPS.length} labels={stepLabels} />
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <div className="rounded-xl border border-border/60 bg-card p-6 min-h-[280px]">
+          <AnimatePresence mode="wait">
+            {currentStep === "basics" && (
+              <BasicsStep key="basics" register={register} errors={errors} />
+            )}
+            {currentStep === "mode" && (
+              <ModeStep key="mode" value={values.mode} onChange={(v) => setValue("mode", v)} />
+            )}
+            {currentStep === "module" && (
+              <ModuleStep key="module" value={values.module_id} onChange={(v) => setValue("module_id", v)} />
+            )}
+            {currentStep === "config" && (
+              <ConfigStep key="config" value={values.config_id} onChange={(v) => setValue("config_id", v)} />
+            )}
+            {currentStep === "review" && (
+              <ReviewStep key="review" values={values} />
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={stepIdx === 0}
+            onClick={() => setStepIdx((i) => i - 1)}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" /> Back
+          </Button>
+
+          {currentStep === "review" ? (
+            <Button
+              type="submit"
+              size="sm"
+              disabled={createRun.isPending}
+              className="gap-1.5"
+            >
+              <Play className="h-4 w-4" />
+              {createRun.isPending ? "Starting…" : "Launch run"}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={!canAdvance()}
+              onClick={() => setStepIdx((i) => i + 1)}
+              className="gap-1"
+            >
+              Next <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
 }

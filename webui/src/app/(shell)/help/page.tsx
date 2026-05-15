@@ -1,100 +1,53 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Keyboard, Sparkles, ExternalLink } from "lucide-react";
-import Link from "next/link";
+"use client";
+import * as React from "react";
+import { motion } from "motion/react";
+import { SectionCard } from "@/components/primitives/section-card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { HelpCircle, BookOpen, Terminal, Keyboard, Activity } from "lucide-react";
+import { pageVariants } from "@/components/motion/presets";
 
 const SHORTCUTS = [
-    { keys: "G D", action: "Go to Dashboard" },
-    { keys: "G R", action: "Go to Runs" },
-    { keys: "G N", action: "New Run" },
-    { keys: "G S", action: "Go to Settings" },
-    { keys: "G L", action: "Go to Logs" },
-    { keys: "?", action: "Show this help" },
+  { keys: ["⌘", "K"], description: "Open command palette" },
+  { keys: ["B"], description: "Toggle sidebar" },
+  { keys: ["⌘", "N"], description: "New run" },
+  { keys: ["⌘", "/"], description: "Toggle help" },
 ];
 
-const MODULE_DOCS: Array<{ id: string; name: string; url: string }> = [];
+const SECTIONS = [
+  { icon: Activity, title: "Running tests", content: "Navigate to Runs → New Run to start a hardware test. Select a module, choose test mode, optionally attach a configuration, then launch." },
+  { icon: Terminal, title: "CLI & API", content: "The Acadia server exposes a REST API at /api/v1. All endpoints are documented via OpenAPI at /api/v1/docs. Run `acadia --help` for CLI usage." },
+  { icon: BookOpen, title: "Configuration", content: "Test configurations define module parameters, thresholds, and iteration counts. Create them under Configs, then reference them when starting a run." },
+];
 
 export default function HelpPage() {
-    return (
-        <div className="space-y-6 max-w-2xl">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight">Help</h1>
-                <p className="text-sm text-muted-foreground mt-1">Documentation, shortcuts, and getting started guides.</p>
+  return (
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-5 max-w-2xl">
+      <div>
+        <h1 className="text-xl font-bold">Help</h1>
+        <p className="text-sm text-muted-foreground">Acadia IV&V Dashboard reference</p>
+      </div>
+      <SectionCard title="Keyboard Shortcuts">
+        <div className="space-y-2">
+          {SHORTCUTS.map(({ keys, description }) => (
+            <div key={description} className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">{description}</span>
+              <div className="flex items-center gap-1">
+                {keys.map((k) => (
+                  <kbd key={k} className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 font-mono text-[10px]">{k}</kbd>
+                ))}
+              </div>
             </div>
-
-            {/* Getting started */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-primary" />
-                        Getting started
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                    <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
-                        <li>Go to <Link href="/settings" className="text-primary hover:underline">Settings → Board</Link> and select your connected board.</li>
-                        <li>The sidebar will populate with the board&#39;s HAL module inventory.</li>
-                        <li>Click <Link href="/runs/new" className="text-primary hover:underline">New Run</Link> to start your first test.</li>
-                        <li>Monitor live results in the run detail view.</li>
-                        <li>Drill into any module&#39;s history via the sidebar.</li>
-                    </ol>
-                </CardContent>
-            </Card>
-
-            {/* Keyboard shortcuts */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <Keyboard className="h-4 w-4" />
-                        Keyboard shortcuts
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="divide-y">
-                        {SHORTCUTS.map(({ keys, action }) => (
-                            <div key={keys} className="flex items-center justify-between py-2">
-                                <span className="text-sm text-muted-foreground">{action}</span>
-                                <div className="flex items-center gap-1">
-                                    {keys.split(" ").map((k) => (
-                                        <kbd key={k} className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
-                                            {k}
-                                        </kbd>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Links */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <BookOpen className="h-4 w-4" />
-                        Documentation
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                    <p className="text-muted-foreground">
-                        Per-module documentation links will appear here once they are registered in the module metadata.
-                    </p>
-                    {MODULE_DOCS.length === 0 && (
-                        <p className="text-muted-foreground text-xs">No module docs registered.</p>
-                    )}
-                    {MODULE_DOCS.map((d) => (
-                        <a
-                            key={d.id}
-                            href={d.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-primary hover:underline"
-                        >
-                            {d.name}
-                            <ExternalLink className="h-3 w-3" />
-                        </a>
-                    ))}
-                </CardContent>
-            </Card>
+          ))}
         </div>
-    );
+      </SectionCard>
+      <div className="space-y-3">
+        {SECTIONS.map(({ icon: Icon, title, content }) => (
+          <SectionCard key={title} title={title}>
+            <p className="text-sm text-muted-foreground leading-relaxed">{content}</p>
+          </SectionCard>
+        ))}
+      </div>
+    </motion.div>
+  );
 }
