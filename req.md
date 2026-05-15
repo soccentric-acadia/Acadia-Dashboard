@@ -1,545 +1,522 @@
-# Web UI App Generation Prompt
+First reivew thsese repos Acadia-Client  Acadia-HAL  Acadia-OS  Acadia-Server
 
-You are building the **Web UI App** for an Independent Validation & Verification (IV&V) tool suite. This is one of five components in the system. Read this entire document before writing any code. Stop at the checkpoints. Do not improvise architectural decisions that are already made below.
 
----
 
-## 1. System context
+# Web UI Update — Align with HAL Refactor
 
-The full suite has five components. You are only building #5.
+You are updating the **Web UI App** (Next.js 14 App Router + shadcn/ui + TanStack Query + TanStack Table + Recharts + ts-proto, talking REST to the Server App) to consume the **refactored HAL result types**. The HAL, the shared protos, the on-target Client App, and the Server App have all been updated upstream. The Web UI must now be updated everywhere it touches result data: type generation, API client, form builder, result rendering, charts, tables, filters, run detail, compare, baseline diff, trend, distribution, heatmap, logs correlation, exports, reports, notifications, and the schema-driven plumbing that drives all of it.
 
-1. **Yocto OS** — runs on Raspberry Pi targets, supports OTA (swupdate). Already done.
-2. **HAL** — C++ library on the target. 50+ modules (CPU, memory, peripherals, sensors, etc.). Four execution modes. Already done.
-3. **Client App** — C++ app on the target. gRPC to the Server App.
-4. **Server App** — Python app on x86 server. gRPC for clients, REST + OpenAPI for this Web UI. Postgres-backed.
-5. **Web UI App** — *what you are building*. Operator-facing dashboard. Talks REST to the Server App.
-
-**The system is purpose-built for a single board at a time.** There is no fleet, no multi-tenant, no board picker in the runtime UI. Adding/removing the board happens in Settings.
-
-The Web UI is the only user-facing surface in the entire system.
+This is a long-running task. Time is not a constraint. **Correctness, completeness, and consistency are the only constraints.**
 
 ---
 
-## 2. UX north star — read this twice
+## 1. Background — what changed upstream
 
-> **"When the user logs in, they should feel like the board is in their hands."**
+The new canonical shape that flows from the Server's REST API into the Web UI:
 
-Everything about the board must be **visible, explicit, and configurable at a glance**. No hidden state. No buried settings. Color-coded status everywhere. The sidebar is the board's physical-feeling hardware inventory. A persistent header keeps the board's identity and live state in view at all times.
+```ts
+type Status   = "PASS" | "FAIL" | "ERROR" | "TIMEOUT" | "SKIPPED" | "ABORTED";
+type Severity = "INFO" | "WARNING" | "ERROR" | "CRITICAL";
 
-Every architectural and design choice below serves this principle. When in doubt, choose the option that makes the board feel more present and tangible.
+type TypedValue =
+  | { type: "bool";   value: boolean }
+  | { type: "int";    value: number }    // server emits int64; UI may need bigint-safe handling for large values
+  | { type: "double"; value: number }
+  | { type: "string"; value: string };
 
----
+interface TestOutput {
+  status: Status;
+  severity: Severity;
+  reason: Record<string, string>;
+  metrics: Record<string, TypedValue>;
+  monitoring: Record<string, TypedValue>;
+  event: Record<string, TypedValue>;
+  error_message: string;
+}
 
-## 3. Global layout
+interface TestResult {
+  id: string;
+  run_id: string;
+  module_id: string;
+  module_version: number;
+  test_id: string;
+  name: string;
+  sequence: number;
+  timestamp: string;       // ISO 8601 UTC
+  duration_ns: number;     // int64 nanoseconds; UI converts for display
+  status: Status;
+  severity: Severity;
+  error_message: string;
+  reason: Record<string, string>;
+  metrics: Record<string, TypedValue>;
+  monitoring: Record<string, TypedValue>;
+  event: Record<string, TypedValue>;
+  subtests: TestResult[];
+  payload_type_url: string;
+  payload_b64: string;
+}
+```
 
-### Persistent board header (always visible, top of every page)
-- Board name + model
-- Online/offline indicator (live)
-- OS / HAL / Client versions
-- Uptime
-- Current activity ("Idle" / "Running: <run name>" with progress)
-- Click anywhere on the header → board detail in Settings
+Old shape that must disappear from the UI: a boolean `passed` field, a flat `data` map / array of strings, single-typed `duration` numbers, any UI logic that treated values as strings by default.
 
-### Sidebar — hardware modules (left, collapsible groups)
-- The literal HAL module inventory of *this* board, fetched from the server
-- Grouped by category (CPU, Memory, Storage, Sensors, Peripherals, …)
-- Each module row shows:
-  - Module name
-  - Live status indicator: idle / running / **PASS** / **FAIL** / **NEVER**
-  - Last-result timestamp (subtle)
-- Click → module page (Section 6)
-- Sidebar is the primary navigation for "the board itself"
-
-### Top nav bar (right of sidebar, above content)
-- Dashboard
-- Runs
-- New Run
-- Templates
-- Schedules
-- Logs
-- Reports
-- OTA
-- Settings
-- Help
-- User menu (far right): profile, change password, API tokens, audit log, logout
-
-### Empty state — no board configured
-- If no board is registered, every page redirects to Settings → Add Board with a friendly explainer.
-
----
-
-## 4. Authentication
-
-- Local account, single user (for now — design schema/UI so adding users later isn't a rewrite, but ship single-user).
-- Login screen, change password, logout.
-- API tokens page (generate, revoke) for headless/CI use.
-- Audit log of significant actions (login, run start/stop, OTA, settings changes).
+The Server's `/openapi.json` is the authoritative REST contract. The Web UI generates its TypeScript API client from it. **Regenerating the client is step one** — every other change in this update depends on the new generated types being in place.
 
 ---
 
-## 5. The central technical challenge — schema-driven everything
+## 2. Scope of this update
 
-The Server App exposes 50+ HAL modules, **each with its own protobuf-defined Config and Result message**. Modules can be added/deprecated server-side.
+You will touch:
 
-**You cannot hand-write a form or result renderer per module.** That doesn't scale and breaks every time a module changes.
+1. **Generated types & API client** — regenerate from the updated OpenAPI + protos. Old generated files deleted; build/regen scripts validated.
+2. **Type-level glue** — any hand-written types that mirrored the old shape (often in `src/lib/api/types.ts` or similar). Replace with the generated types or thin re-exports.
+3. **Result renderers** — the generic schema-driven renderer plus any module overrides registered in the renderer registry. Render `status` and `severity` distinctly. Render the four typed maps as separate sections. Render `error_message` prominently when set. Render subtests recursively.
+4. **Run detail page** — per-module summary (PASS / FAIL / NEVER / and now `ABORTED` distinctly), drill-in time-series, live streaming.
+5. **Module page** — last result card, configuration panel, history table (with click-to-chart on numerics), trend, distribution, heatmap, baseline diff, threshold editor, raw payload viewer.
+6. **Run compare page** — typed value comparisons. Status changes per the wider status set. Numeric drift uses numeric typing, not stringified equality.
+7. **Logs page** — log↔result correlation by timestamp still works; result-jump links carry the new result id.
+8. **Forms** — the schema-driven form builder is mostly module-config and unaffected by *result* shape changes, but threshold editors and event-condition editors now operate on typed values; update.
+9. **Filters and tables** — every result table column, every filter that referenced `passed`, every status badge that assumed two-valued status.
+10. **Charts** — Recharts series construction must extract typed numerics (only `int` and `double` `TypedValue` variants are chartable); strings and bools render in alternate UI (table cells, switches).
+11. **Exports** — CSV download links go through the server; verify the UI doesn't post-process or stringify exported data.
+12. **Reports** — UI-driven PDF/HTML report previews mirror server templates; update the preview renderer.
+13. **Notifications UI** — failure notifications now distinguish FAIL / ERROR / TIMEOUT / ABORTED; update display.
+14. **Empty / error / loading states** — verify new statuses don't fall into "unknown" empty states.
+15. **Theming** — status colors. PASS green, FAIL red, ERROR red (darker), TIMEOUT amber, SKIPPED gray, ABORTED neutral/purple. Severity tint or border.
+16. **Tests** — unit (Vitest + RTL) and E2E (Playwright). Coverage of every `Status` value and every `TypedValue` variant.
 
-Required pattern:
-
-- At build/runtime, generate TypeScript types from the existing `protos/` directory.
-- The server's `/api/v1/modules` endpoint returns the module registry (id, proto type URLs, version, category, status).
-- A **generic schema-driven form builder** renders Config forms from module schema.
-- A **generic result renderer** renders Results from module schema.
-- A **renderer registry** (`module_id → custom component`) allows overrides where the generic view is insufficient. Start empty.
-- `ResultEnvelope.payload` is `google.protobuf.Any`. Confirm at Checkpoint A whether the server returns it as base64 + type_url (client decodes) or pre-decoded JSON (UI just renders).
-
-If you find yourself writing a switch over `module_id` outside the renderer registry, stop and ask.
+You will **not** touch:
+- The HAL, the protos, the Client App, or the Server App.
+- Any module-specific Config schema (those didn't change in this refactor — they live in the per-module protos which are about *test configuration*, not *test results*).
 
 ---
 
-## 6. Pages — full specification
+## 3. Architectural rules — reaffirmed
 
-### 6.1 Login (`/login`)
-- Username + password
-- Error states
-- Redirect to Dashboard on success
-- If no board configured → redirect to Settings → Add Board after login
+The Web UI's load-bearing patterns must survive this refactor.
 
-### 6.2 Dashboard (`/`)
-- System health widget: board online, server reachable, last successful run
-- Quick stats: total runs, pass rate %, failure trend (sparkline)
-- Recent failures feed (last N failed runs, click to drill in)
-- **Last N runs table** (newest first): name, mode, started, duration, status, pass/fail counts. Click row → run detail.
-- Pinned/favorite runs section
-- Big primary CTA: "Start New Run"
+- **Schema-driven rendering.** A generic renderer handles every module's result by default; custom renderers are *overrides* registered by `module_id`. The new typed maps make the generic renderer richer — they do not justify adding a switch over modules.
+- **Renderer registry stays small.** This refactor must not motivate adding many module-specific renderers. If the generic renderer can't display something, fix the generic renderer.
+- **No `switch(module_id)`** outside the renderer registry, anywhere.
+- **Server is the source of truth.** If a status or severity arrives that doesn't fit the spec, the UI surfaces it visibly (an `UNKNOWN` chip) rather than silently coercing. Forwards-compat for any future enum additions.
+- **Persistent board header always visible.** Refactor does not remove or hide it. The status of an active run shown in the header now uses the new status badges.
+- **Sidebar modules show live status** per module — refactor preserves and extends this (PASS / FAIL / NEVER / running / etc.).
+- **Generated code is build output**, not authoritative source. Never hand-edit generated proto types or API client code.
+- **TanStack Query owns server state.** No drifting into local component state for things that should live in the cache.
+- **The UI never talks to the board or the database directly** — only REST to the server. Refactor does not change this.
 
-### 6.3 Module pages (`/modules/[moduleId]`)
-The most important page in the app. Reached via sidebar click.
+---
+
+## 4. Required code changes — concrete
+
+### 4.1 Regenerate types and API client
+
+1. Run `scripts/generate-proto-types.sh` against the updated `protos/`. Output under `src/lib/proto/generated/` (build artifact, gitignored).
+2. Run `scripts/generate-api-client.sh` against the server's `/openapi.json`. Output under `src/lib/api/generated/`.
+3. Delete any stale hand-written types in `src/lib/api/types.ts` that duplicate generated ones.
+4. Re-export the canonical types (`TestResult`, `TestOutput`, `Status`, `Severity`, `TypedValue`) from a single module (`src/lib/api/types.ts` or `src/lib/proto/types.ts`) and import from there everywhere. Avoid scattered imports from `generated/`.
+5. Verify `tsc --noEmit` runs without errors against the new generated types. Expect compile breaks downstream — that's the work in the rest of this prompt.
+
+### 4.2 TypedValue helpers
+
+Create a small set of pure utilities under `src/lib/value/`:
+
+```ts
+// src/lib/value/typed.ts
+export function isNumeric(v: TypedValue): v is { type: "int" | "double"; value: number };
+export function isBool(v: TypedValue):    v is { type: "bool";   value: boolean };
+export function isString(v: TypedValue):  v is { type: "string"; value: string };
+
+export function toNumber(v: TypedValue): number | null;   // null for non-numerics
+export function toDisplayString(v: TypedValue, opts?: { precision?: number; unit?: string }): string;
+export function compare(a: TypedValue, b: TypedValue): -1 | 0 | 1 | null; // null for incompatible types
+
+export function extractNumericSeries(
+  results: TestResult[],
+  source: "metrics" | "monitoring" | "event",
+  key: string,
+): { timestamp: string; value: number }[];   // filters non-numerics and missing keys
+```
+
+These are the only place the UI inspects the `TypedValue` shape. Chart builders, threshold editors, sort comparators, and table cells call these helpers — they do not unwrap the `{type, value}` object inline.
+
+### 4.3 Status and severity helpers
+
+```ts
+// src/lib/status/index.ts
+export const STATUS_ORDER: Status[] = ["PASS", "FAIL", "ERROR", "TIMEOUT", "SKIPPED", "ABORTED"];
+
+export function isFailureStatus(s: Status): boolean;    // FAIL | ERROR | TIMEOUT
+export function isUserCancelled(s: Status): boolean;    // ABORTED
+export function isNoOp(s: Status): boolean;             // SKIPPED
+export function isTerminal(s: Status): boolean;         // all except in-flight (no in-flight in this enum, but defend)
+
+export function statusColor(s: Status, severity?: Severity): {
+  fg: string; bg: string; ring: string;
+};
+
+export function severityRank(s: Severity): number;      // INFO=0, WARNING=1, ERROR=2, CRITICAL=3
+```
+
+Color tokens come from the shadcn theme tokens, not hex literals. Suggested mapping (verify against the theme):
+
+| Status   | Token family   |
+|----------|----------------|
+| PASS     | `success`      |
+| FAIL     | `destructive`  |
+| ERROR    | `destructive` (darker) |
+| TIMEOUT  | `warning` / amber |
+| SKIPPED  | `muted`        |
+| ABORTED  | `accent` (neutral/purple) |
+
+Severity modulates intensity — `WARNING` softens, `CRITICAL` adds a ring/border.
+
+A `<StatusBadge>` component wraps these helpers; every page uses it. No hand-rolled status pills.
+
+### 4.4 The generic result renderer
+
+Located at `src/components/results/renderers/generic.tsx`. Update to render the new shape end-to-end.
 
 Layout (top to bottom):
-- Module header: name, category, version, live status badge (idle/running/PASS/FAIL/NEVER), last-tested timestamp
-- **Last result card**: status, key fields decoded from payload, "view raw proto" toggle
-- **Configuration panel** — inline editable:
-  - Enable/disable toggle (for the next run)
-  - Mode-aware fields (frequency, monitoring extras, event condition) — only the fields relevant to the currently selected run mode
-  - Per-module notes/comments
-- **History**:
-  - Time-series table of all past results for this module (paginated, server-side)
-  - Click a row → expand to show all fields
-  - Click any numeric field header → plot that field over time as a chart (Recharts)
-  - Filter by time range, status, run
-- **Trend view**: same module across many runs over time
-- **Baseline diff**: if a golden run is set, diff each result against baseline; show drift indicators
-- **Threshold alerts**: configure warn/fail thresholds per numeric field
-- **Histogram/distribution** per numeric field
-- **Anomaly highlights**: auto-flag outliers (z-score or IQR — pick at implementation)
-- **Heatmap**: result status over time (rows = runs, cells = pass/fail/never)
-- **Raw proto payload viewer**: collapsible JSON tree of the decoded Any payload
-- **Logs slice**: logs filtered to this module's relevant time windows
+1. **Header**: status badge, severity badge (when non-INFO), module name, test name, timestamp, duration (humanized from `duration_ns`), sequence (when streaming).
+2. **Error message banner** — visible only when `error_message` is non-empty. Use destructive variant.
+3. **Reason** — rendered as a small key-value list (keys typically short labels like `why`, `detail`).
+4. **Metrics** — keyed list of `TypedValue`. Numeric values right-aligned with type-aware formatting. Each numeric row has a small "chart" affordance (click → opens that field in the trend chart for this test).
+5. **Monitoring** — same shape as Metrics, in a separate collapsible section. Empty section hidden.
+6. **Event** — same shape, separate section. Empty section hidden.
+7. **Subtests** — recursive list. Each subtest rendered with this same renderer. Nested visually (indent / tree).
+8. **Raw payload viewer** — collapsible. Shows decoded JSON of the proto from `payload_b64` + `payload_type_url`, plus the base64 source on demand. Decode using generated proto types; fall back to "raw bytes (type X)" on decode failure.
 
-### 6.4 Runs (`/runs`)
-- Paginated list of all runs (server-side pagination)
-- Columns: name, UUID (short), mode, started, duration, status, pass/fail counts, tags
-- Filters: status, mode, tag, date range, free-text search on name/description/notes
-- Bulk actions: delete, export, tag
-- Click row → run detail
+The renderer must handle every combination: empty maps, all maps populated, deep subtest trees, every status, every severity, every `TypedValue` variant.
 
-### 6.5 Run detail (`/runs/[runId]`)
-- Run header: name, UUID, mode, status, started, duration, description, tags, notes
-- Live mode (if running): progress bar overall + per-module live status, cancel/pause/resume buttons (pause/resume only if mode supports it)
-- **Per-module summary table**: every module that was enabled in this run, with its last result before run ended (PASS/FAIL/NEVER badge), result count, click → drill into that module's time-series for *this run*
-- **Module time-series detail (drill-in)**:
-  - Full time-series table for that module within this run
-  - Click numeric field → chart
-  - Filter/search within
-- **Run-level actions**:
-  - Re-run with same config
-  - Clone as new run (opens New Run prefilled)
-  - Export CSV / JSON
-  - Generate PDF/HTML report
-  - Add/edit notes after completion
-  - Tag (regression, smoke, RC, custom)
-  - Attach files (test plan PDF, photos)
-  - Compare with another run (opens compare view)
-  - Mark as baseline / golden
-  - Delete
-- **Logs panel**: logs from this run's time window, live-tailing if run is active, with correlation (click a result → jump to that timestamp in logs)
+### 4.5 Renderer registry
 
-### 6.6 Run compare (`/runs/compare?a=...&b=...`)
-- Side-by-side view of two runs
-- Per-module diff: did pass/fail status change, value drift on numeric fields, new failures, recovered failures
-- Highlight regressions vs. improvements
+`src/components/results/renderers/registry.ts` exports a `Record<string, ResultRenderer>`. Start empty — the generic renderer covers every module by default. The refactor does not introduce custom renderers; if one is needed for a specific module (e.g. a graphical sensor sweep), it lands in a follow-up.
 
-### 6.7 New Run (`/runs/new`)
-The most complex authoring flow. Stepper or single-page form — decide at Checkpoint A based on shadcn patterns.
+The registry lookup pattern:
 
-1. **Basics**: run name (free text, not unique), description, tags
-2. **Mode**: pick one of four (single-shot, long-running, monitoring, event-based) as radio cards with descriptions. **No mixing.**
-3. **Module selection & config**:
-   - All modules disabled by default
-   - Search/filter modules
-   - Bulk enable/disable: all, by category
-   - Per module, when enabled, show mode-appropriate config inline (schema-driven form builder):
-     - Single-shot: just module-specific params
-     - Long-running: frequency + module-specific params
-     - Monitoring: frequency + monitoring extras + module-specific params
-     - Event-based: trigger condition + module-specific params
-   - Per-module notes
-4. **Review**: summary of enabled modules and their configs
-5. **Actions**:
-   - **Dry-run / Validate**: send config to server for validation without execution
-   - **Save as template** (name, description) for reuse
-   - **Schedule for later** (one-time datetime or cron-like recurring)
-   - **Start now** → redirects to live run detail
-
-Also: **"Clone existing run"** button at top — picks any past run/template as the starting point.
-
-### 6.8 Templates (`/templates`)
-- List of saved templates
-- Create new template (same builder as New Run, just doesn't execute)
-- Edit, delete, duplicate
-- Export template to file (JSON)
-- Import template from file
-- "Use this template" → opens New Run prefilled
-
-### 6.9 Schedules (`/schedules`)
-- List of scheduled runs (one-time and recurring)
-- Status: pending, last run, next run, enabled/disabled
-- Edit cron expression / datetime
-- Pause/resume schedule
-- View history of executions per schedule
-
-### 6.10 Logs (`/logs`)
-- Filters: source (kernel / syslog / app), severity, time range, free-text search
-- Virtualized scrolling table
-- Live tail toggle (SSE if server supports, polling fallback — confirm Checkpoint A)
-- Bookmarks: mark interesting log lines, jump back later
-- Saved filter views
-- Correlation: link in/out with run detail (jump from result → log moment)
-- Export / download
-
-### 6.11 Reports (`/reports`)
-- Generate one-off PDF/HTML report for a specific run
-- Manage scheduled email reports (which run pattern, when, recipients)
-- Custom report templates (header, footer, sections to include)
-
-### 6.12 OTA (`/ota`)
-- Current versions: OS, HAL, Client (read-only from board)
-- Upload swupdate artifact (file picker)
-- Verify signature / checksum (server-side; show result)
-- Show diff: current version → target version (versions, changelog if available)
-- Trigger upgrade button (confirmation modal)
-- Live progress / status of upgrade
-- Post-upgrade smoke test: pick a saved template to auto-run after successful upgrade
-- Upgrade history table (date, from→to, status, who, rollback button per entry)
-- Rollback action per historical upgrade
-
-### 6.13 Settings (`/settings`)
-Tabbed:
-
-**Board tab**
-- If no board: "Add Board" form (board identifier, network address, pairing token or similar — confirm at Checkpoint A what the server requires)
-- If board exists: name (rename), tags, hardware model (read-only), online/offline indicator, **Remove Board** action with strong confirm
-
-**Versions tab**
-- OS, HAL, Client, Server, Web UI — each with version + build date if available
-
-**Account tab**
-- Change password
-- API tokens (list, generate, revoke)
-
-**Notifications tab**
-- Run complete: enabled / disabled, channels (in-app, email)
-- Test failure: enabled / disabled, channels
-- Scheduled reports management link
-
-**Data tab**
-- Retention policy (days to keep runs / results / logs)
-- Backup database (download)
-- Restore database (upload)
-
-**Display tab**
-- Theme: light / dark / system
-- Time zone
-- Date/time format
-- Keyboard shortcuts (view + customize)
-
-**Network tab**
-- Server connection settings (read-only display of current; if misconfigured, allow edit)
-- gRPC connection diagnostic (server ↔ board) — run test button
-
-**Advanced tab**
-- HAL module self-test trigger
-- Audit log viewer (paginated, filterable)
-- Raw proto payload viewer toggle (global default)
-
-### 6.14 Help (`/help`)
-- First-run wizard re-launch (add board → smoke test walkthrough)
-- In-app docs / tooltips index
-- Per-module documentation links
-- "What's new" changelog viewer
-- Keyboard shortcuts reference
-
-### 6.15 First-run wizard
-- Triggered automatically after first login when no board exists
-- Step 1: welcome / overview
-- Step 2: add board
-- Step 3: confirm board online + module inventory loaded
-- Step 4: run a smoke test (single-shot, all modules)
-- Step 5: tour of the UI
-
----
-
-## 7. Architectural decisions already made — do not relitigate
-
-- **Framework**: Next.js 14+ App Router. TypeScript strict.
-- **UI library**: shadcn/ui + Tailwind + lucide-react.
-- **State**: TanStack Query for server state. Zustand only if needed for cross-component client state. No Redux.
-- **Forms**: react-hook-form + zod. Schema-driven form builder generates zod schemas dynamically from module metadata.
-- **Tables**: TanStack Table. Server-side pagination/sort/filter for result and log tables.
-- **Charts**: Recharts. Custom renderers for modules needing more.
-- **Streaming**: Server-Sent Events (SSE) preferred for live runs and log tailing; polling fallback. Decide at Checkpoint A.
-- **Proto types**: generate TS types from `protos/` using `ts-proto` or `protobuf-ts`. Pick one at Checkpoint A.
-- **API client**: generated from server's OpenAPI spec via `openapi-typescript` + `openapi-fetch`. Do not hand-write.
-- **Notifications**: in-app via `sonner` (shadcn toast). Email goes through server.
-- **Theming**: `next-themes`, default system, theme tokens via shadcn.
-- **File uploads** (OTA artifacts, attachments, template import, DB restore): multipart with progress.
-- **No global CSS beyond Tailwind base + shadcn theme tokens.**
-
----
-
-## 8. Required project layout
-
-```
-webui/
-  package.json
-  tsconfig.json
-  next.config.mjs
-  tailwind.config.ts
-  components.json
-  .env.example
-  README.md
-  src/
-    app/
-      layout.tsx                    # root: theme, query client, auth, board context
-      page.tsx                      # dashboard
-      login/page.tsx
-      modules/[moduleId]/page.tsx
-      runs/page.tsx
-      runs/new/page.tsx
-      runs/[runId]/page.tsx
-      runs/compare/page.tsx
-      templates/page.tsx
-      schedules/page.tsx
-      logs/page.tsx
-      reports/page.tsx
-      ota/page.tsx
-      settings/page.tsx
-      help/page.tsx
-    components/
-      layout/
-        app-shell.tsx
-        board-header.tsx            # persistent header
-        sidebar-modules.tsx         # hardware-module sidebar
-        top-nav.tsx
-        user-menu.tsx
-      modules/
-        module-status-badge.tsx
-        config-panel.tsx
-        history-table.tsx
-        trend-view.tsx
-        heatmap.tsx
-        threshold-editor.tsx
-      runs/
-        run-status-badge.tsx
-        run-launcher.tsx
-        run-progress.tsx
-        per-module-summary.tsx
-        run-actions.tsx
-        compare-view.tsx
-      results/
-        result-stream.tsx
-        result-table.tsx
-        result-detail.tsx
-        payload-viewer.tsx
-        renderers/
-          generic.tsx
-          registry.ts
-      logs/
-        log-viewer.tsx
-        log-tail.tsx
-        log-bookmarks.tsx
-      form-builder/
-        index.tsx
-        field-renderers/
-        zod-from-schema.ts
-      mode-fields/
-        single-shot.tsx
-        long-term.tsx
-        monitoring.tsx
-        event-based.tsx
-      ota/
-        upgrade-flow.tsx
-        upgrade-history.tsx
-      settings/
-        board-tab.tsx
-        versions-tab.tsx
-        account-tab.tsx
-        notifications-tab.tsx
-        data-tab.tsx
-        display-tab.tsx
-        network-tab.tsx
-        advanced-tab.tsx
-      onboarding/
-        first-run-wizard.tsx
-      ui/                           # shadcn primitives
-    lib/
-      api/
-        client.ts                   # generated openapi client wrapper
-        queries.ts                  # TanStack Query hooks per resource
-        sse.ts
-      proto/
-        generated/                  # ts-proto output, gitignored
-        decode.ts
-        registry.ts
-      schema/
-        module-schema.ts
-        proto-to-schema.ts
-      auth/
-        session.ts
-      board/
-        context.tsx                 # board state provider
-      utils/
-    hooks/
-    styles/
-      globals.css
-  public/
-  scripts/
-    generate-proto-types.sh
-    generate-api-client.sh
-  tests/
-    unit/
-    e2e/
+```ts
+const renderer = registry[result.module_id] ?? GenericResultRenderer;
+return <renderer result={result} />;
 ```
 
+This is the only `module_id`-aware code path in the UI.
+
+### 4.6 Run detail page
+
+`src/app/runs/[runId]/page.tsx` and its children.
+
+Changes:
+
+- **Per-module summary table**: badge column now uses the new status set. Logic per module:
+  - **PASS** — last result for the module has `status === "PASS"`.
+  - **FAIL** — last result `status ∈ {FAIL, ERROR, TIMEOUT}`. Show severity as a tint on the badge.
+  - **NEVER** — module enabled in this run, no result, or all results SKIPPED.
+  - **ABORTED** — last result `status === "ABORTED"`. Distinct badge.
+  - If the run itself was cancelled mid-stream, top-of-page banner shows it; per-module ABORTED badges hang off that.
+- **Drill-in** to a module within a run: time-series table of all results for `(run_id, module_id, test_id)`. Columns: sequence, timestamp, status badge, severity, key metrics (a few top by selection or convention), duration. Click any row → expanded view using the generic renderer.
+- **Click numeric field in expanded view** → adds that field to the chart for this drill-in. Multiple fields chartable simultaneously (different lines). Chart uses `extractNumericSeries` from Section 4.2.
+- **Live mode**: if the run is active, results stream in via SSE (or polling fallback — confirm what the server exposes). Each new result appended to the table; chart updates incrementally. Sequence numbers drive the order, not arrival time.
+- **Filter within drill-in**: by status, by severity, by time range, free-text search in `reason` and `error_message`.
+
+### 4.7 Module page
+
+`src/app/modules/[moduleId]/page.tsx`.
+
+Changes (the page is module-scoped, not run-scoped):
+
+- **Last result card** at the top uses the generic renderer for the most recent result of any test in this module.
+- **History table**: paginated results across all runs for this module. Columns: timestamp, run name, test_id, status, severity, top metrics, link to run detail.
+- **Trend view**: select a `(test_id, metric_key)` pair → time-series chart of that numeric across runs. The metric selector lists only numeric keys observed in recent results (server's `/modules/{id}/trend?from=&to=&field=` endpoint already filters to numerics; UI uses the response).
+- **Distribution view**: histogram of values for a selected `(test_id, metric_key)`. Numeric only.
+- **Heatmap**: status grid of (run × test_id). Color per status. Status legend shows all six statuses.
+- **Baseline diff**: when a baseline run is set, show per-test status change since baseline and per-metric drift (numeric only). Use `compare()` from `value/typed.ts`.
+- **Threshold editor**: per `(test_id, metric_key)`, set op (`GT|LT|GE|LE|EQ|NE`), set typed value (an input that respects the metric's observed type). On save → POST to server.
+- **Raw payload viewer toggle** — global default from Settings, overrideable per result.
+
+### 4.8 Compare page
+
+`src/app/runs/compare/page.tsx` with `?a=...&b=...`.
+
+Changes:
+
+- For each `(module_id, test_id)` pair across both runs, show row with: status A → status B (badge transition), per-metric numeric drift (only numeric `TypedValue`s), and a categorization label:
+  - **unchanged** — same status, no metric drift beyond threshold.
+  - **improved** — status went from non-PASS to PASS, or numeric metric drifted in a configured-better direction.
+  - **regressed** — status went from PASS to non-PASS.
+  - **drifted** — numeric metric changed beyond a configurable threshold while status unchanged.
+  - **disappeared** — present in A, absent in B.
+  - **appeared** — absent in A, present in B.
+
+These categorizations come from the server's `/runs/{a}/compare/{b}` endpoint; the UI renders. Do not duplicate categorization logic in the client.
+
+### 4.9 Result table component
+
+`src/components/results/result-table.tsx` (TanStack Table).
+
+Update default columns:
+- **Sequence** (right-aligned numeric)
+- **Timestamp** (relative + absolute on hover)
+- **Status** (badge using `<StatusBadge>`)
+- **Severity** (small chip; hidden by default for INFO)
+- **Test** (test_id + name)
+- **Duration** (humanized from `duration_ns`)
+- **Top metrics** (configurable; up to 3 by default, expandable)
+
+Sorting on metric columns uses `compare()` for typed comparison.
+
+Filtering on `status` is a multi-select chip group of all six values. Filtering on `severity` similarly.
+
+Free-text search hits `name`, `test_id`, `error_message`, and stringified values in `reason`.
+
+### 4.10 Logs page
+
+`src/app/logs/page.tsx`.
+
+The log entry shape itself doesn't change in this refactor — but **log-to-result correlation links must use the new result id** and the timestamp source on the result is the new `timestamp` field. Verify:
+
+- Clicking "jump to logs" from a result detail navigates to logs filtered to that timestamp window with `result_id` as a query param.
+- Clicking a log line that's correlated to a result navigates back to the result detail using the new id field.
+
+### 4.11 Notifications UI
+
+`src/components/notifications/*` (in-app toast + notifications page).
+
+Failure notification categories now distinguish:
+- **Test failure** — `status ∈ {FAIL, ERROR, TIMEOUT}` with `severity ∈ {ERROR, CRITICAL}`. Destructive variant.
+- **Test warning** — `status ∈ {FAIL, ERROR}` with `severity === "WARNING"`. Warning variant.
+- **Run aborted** — separate notification, neutral variant.
+- **Threshold crossed** — derived from server; carries `metric_key`, threshold spec, observed typed value, deep link.
+
+Each notification carries module name, test name, status, severity, the truncated `error_message`, and a click-through to the result detail.
+
+### 4.12 Exports
+
+The server emits CSV and NDJSON with the documented column / line shape. The UI's export buttons:
+
+- Download CSV via a direct anchor to `/api/v1/runs/{id}/results/export?format=csv`. Do not stream-process in the browser.
+- Same for JSON via `?format=json` (NDJSON streaming).
+- If the UI ever needs to preview an export client-side, it must use the same DTO shape — no UI-side re-serialization.
+
+Verify export filename conventions and Content-Disposition are honored — don't introduce a UI-side renamer that strips the run id from the filename.
+
+### 4.13 Reports UI
+
+Report preview rendering uses the same generic renderer for each result. A report template selector chooses sections (run header, per-module summary, drill-ins, charts, log slices); each section uses the corresponding existing component.
+
+Confirm: a report generated by the server's `/reports/runs/{id}` endpoint and a UI-rendered preview of the same run produce visually consistent output for status/severity badges, typed values, and subtests. Cosmetic differences (PDF page breaks) are expected; data divergence is not.
+
+### 4.14 Empty / loading / error states
+
+For every page touching results, audit empty states:
+- **No results yet** — clear message, not "an error occurred."
+- **All results SKIPPED** — show the run as such; don't display blank rows.
+- **Run in `ABORTED` state with partial data** — banner explains; partial data displayed.
+- **Unknown status from server** (forwards-compat) — render as `UNKNOWN` chip with a tooltip ("Server returned a status this UI version doesn't recognize"). Don't crash, don't coerce.
+
+### 4.15 Theming and tokens
+
+Add or update theme tokens in `tailwind.config.ts` / shadcn theme:
+- `success` (PASS), `destructive` (FAIL/ERROR), `warning` (TIMEOUT), `muted` (SKIPPED), `accent` (ABORTED).
+- Severity overlay: subtle ring color for CRITICAL, lighter for WARNING.
+
+Verify dark mode and light mode both pass contrast on every status × severity combination.
+
+### 4.16 SSE / streaming hooks
+
+If live results use SSE, the message payload now carries the new shape. Update the SSE message parser to use the generated `TestResult` type. Verify TanStack Query cache updates on each message append to the correct query key.
+
+If the server moved from polling to SSE (or vice versa) as part of its update, conform. Confirm at Phase 1.
+
 ---
 
-## 9. Operational requirements
+## 5. Tests — required coverage
 
-- **Loading states**: skeletons on every async view. No blank screens.
-- **Empty states**: every list has a designed empty state with next-action.
-- **Error states**: every failed query shows recoverable error with retry. Network vs. server errors distinguished.
-- **Optimistic updates**: low-risk only (rename, tag, note). Never for run launch or OTA.
-- **Pagination**: server-side, cursor-based if available, offset otherwise. Default 50.
-- **Accessibility**: keyboard-navigable end-to-end. Focus rings respected. shadcn defaults preserved.
-- **Responsive**: laptop primary, tablet secondary. Phone not a target.
-- **Performance**: result and log tables virtualized. 10k rows must not jank.
-- **Configuration**: `NEXT_PUBLIC_API_BASE_URL` and other env vars. `.env.example` shipped.
-- **Theme**: dark/light/system via `next-themes`.
+### 5.1 Unit tests (Vitest + RTL)
 
----
+- `value/typed.ts` — every helper, every `TypedValue` variant, `extractNumericSeries` with mixed-typed inputs (numeric kept, non-numeric filtered).
+- `status/index.ts` — every helper, every `Status` and `Severity` combination, color token correctness.
+- `<StatusBadge>` — renders every status, severity overlays apply, `UNKNOWN` fallback works.
+- `<GenericResultRenderer>` — fixture results covering: PASS with metrics only; FAIL with reason + metrics + monitoring; ERROR with `error_message`; TIMEOUT; SKIPPED; ABORTED; one with subtests two levels deep; one with empty maps.
+- `<ResultTable>` — sorting on numeric metric column uses typed compare; filter chips for status work; severity column hides for INFO.
+- Renderer registry — empty registry falls through to generic; injecting a custom renderer routes correctly.
 
-## 10. Testing requirements
+### 5.2 Page-level tests (RTL or Playwright component tests)
 
-- **Unit tests** (Vitest + React Testing Library): form builder, schema-to-zod, payload decoder, every non-trivial component.
-- **E2E tests** (Playwright): login → first-run wizard → add board → smoke run; create config → launch run → see streaming results; OTA upload → upgrade (mocked); logs filter + tail; run compare; baseline diff.
-- Coverage target: 70%+ on `src/` excluding generated code.
+- Run detail per-module summary: badge logic across every status and the NEVER case.
+- Module page trend chart: numeric series extracted, non-numerics ignored, empty series shows empty-state.
+- Compare page: each category (unchanged / improved / regressed / drifted / disappeared / appeared) renders correctly given fixture data.
+- Threshold editor: typed value input matches observed metric type; invalid type combos show validation error.
+- Notification rendering: severity styling differs visibly between WARNING and CRITICAL.
 
----
+### 5.3 E2E tests (Playwright)
 
-## 11. Workflow — execute in this order, stop at each checkpoint
+Against a mocked server (msw or Playwright request mocking) emitting the new shape:
 
-### Checkpoint A — Scan and plan
-Before writing code:
-1. Locate the Server App. Read its OpenAPI spec (`/openapi.json` or FastAPI source). List every endpoint, request/response shape.
-2. Locate `protos/`. List every `.proto` file. Read `common.proto`, `hal_service.proto`, `modules/*.proto`, `registry/modules.yaml`.
-3. Decide ts-proto vs protobuf-ts. Justify.
-4. Confirm: does the server pre-decode `Any` payloads to JSON, or return base64 + type_url?
-5. Confirm: SSE or polling for live updates?
-6. Confirm: what does board pairing look like (form fields, auth)?
-7. Confirm: does the server support pause/resume, or only stop/cancel? Mode-specific?
-8. Confirm: notification delivery — server-side email/webhook, or UI-only toasts?
-9. Confirm: scheduling — server-side cron, or UI-managed?
-10. Confirm: OTA — does the server handle artifact verification and rollback, or does the UI orchestrate?
-11. Produce a written plan: page-by-page, what's a Server Component vs Client Component, what queries each page uses, what mutations.
-12. List every ambiguity.
+- Launch a run → live SSE updates → status badge transitions correctly → run completes → drill-in chart populated.
+- Open module page → select metric → trend renders → set threshold → notification fires when next fixture result crosses.
+- Mark a run as baseline → open compare → drift highlighted.
+- ABORTED run end-to-end: cancel mid-stream, final state shows ABORTED, partial results visible.
+- Forwards-compat: server returns `status: "FUTURE_STATUS"` → UI renders `UNKNOWN`, page does not crash.
+- Logs ↔ result jump: click result → logs filter to timestamp → click log line → return to result.
 
-**STOP. Wait for confirmation.**
+### 5.4 Grep verification
 
-### Checkpoint B — Foundation
-1. Next.js + TS + Tailwind + shadcn baseline.
-2. Theme provider, query provider, auth provider, board provider.
-3. App shell: persistent board header, module sidebar (with mocked data initially), top nav, user menu.
-4. Login page, session handling, route protection.
-5. `scripts/generate-proto-types.sh` and `scripts/generate-api-client.sh` working.
-6. Dashboard skeleton with real health check + real run list.
-7. Empty-state "no board configured" routing.
+```
+grep -rn "\.passed\b"        webui/src/
+grep -rn "output\.data\b"    webui/src/
+grep -rn "duration<double>"  webui/src/   # belt-and-suspenders; mostly irrelevant in TS
+grep -rn "result\.data\b"    webui/src/
+```
 
-Run lint, typecheck, unit tests. **STOP.**
+Expect zero hits in active code. Generated files (`src/lib/proto/generated/`, `src/lib/api/generated/`) are excluded.
 
-### Checkpoint C — Modules and the form builder
-1. Module sidebar wired to real `/api/v1/modules`.
-2. Module page with live status, last result, history table, click-to-chart.
-3. Schema-driven form builder with unit tests for every field-type mapping.
-4. Renderer registry pattern in place (empty registry, generic renderer as fallback).
-5. Payload decoder for `Any` types.
+### 5.5 Type-level check
 
-Run tests. **STOP.**
-
-### Checkpoint D — Runs, New Run, Templates, Schedules
-1. Runs list + filters.
-2. New Run flow with mode picker, module enable/configure, dry-run, save-as-template, schedule, start.
-3. Run detail with per-module summary, drill-in time-series, live mode with progress.
-4. Run actions: cancel, pause/resume (where applicable), re-run, clone, export CSV/JSON, tag, note, attach, compare, mark baseline, delete.
-5. Run compare view.
-6. Templates page (list, create, edit, delete, duplicate, import, export).
-7. Schedules page.
-
-E2E tests for the critical flow: New Run → Live run → Drill-in → Compare. **STOP.**
-
-### Checkpoint E — Logs, Reports, OTA
-1. Logs page: filters, virtualized table, tail mode, bookmarks, saved views, export, run correlation.
-2. Reports: one-off PDF/HTML generation, scheduled email reports, custom templates.
-3. OTA: upload, verify, diff, trigger, progress, history, rollback, post-upgrade smoke test.
-
-Run tests. **STOP.**
-
-### Checkpoint F — Settings, Help, polish
-1. Settings tabs: Board, Versions, Account, Notifications, Data, Display, Network, Advanced.
-2. First-run wizard.
-3. Help page + per-module documentation links + "what's new" changelog.
-4. Audit log viewer.
-5. Accessibility pass.
-6. Performance pass (virtualization verified on 10k rows).
-7. Production build verified.
-8. Dockerfile multi-stage, non-root.
-9. README: run locally, env vars, regenerate types, add a custom renderer, add a new settings tab.
-
-Final test run. Final report.
+`tsc --noEmit` runs clean against the entire `src/`. No `any`, no `@ts-ignore` introduced as part of this refactor (existing ones stay if scoped, but new ones are not allowed to bypass the type changes).
 
 ---
 
-## 12. Hard rules
+## 6. Workflow — phases
 
-- The UI talks to the Server App only via documented REST. Never directly to the board. Never to the database.
-- No hardcoded module names, schemas, or field lists. Everything reads from the server's module registry.
-- One form builder, one generic renderer. Module-specific code lives only in the renderer registry as overrides.
-- Sidebar must reflect the **actual** HAL module inventory of the configured board, not a static catalog.
-- The board header is **always** visible. Never hidden by overlays, modals, or focused views — except the login page.
-- Generated proto types and generated API client are build output. Not committed as authoritative source.
-- No new state management library beyond Section 7.
-- If the server's actual API contradicts this prompt, the server wins — stop and report.
-- If you find yourself writing a switch over `module_id` outside the renderer registry, stop and ask.
-- If a feature in Section 6 conflicts with what the server actually offers, stop and ask — do not silently degrade.
-- shadcn primitives' accessibility defaults must not be replaced with custom divs.
+Long-running task. No human gates. Write each phase report under `webui_update/`.
 
-## 13. Deliverables
+### Phase 1 — Discovery
+1. Confirm the upstream updates are in place:
+   - Read `protos/common.proto` — `TestStatus`, `TestSeverity`, `TypedValue`, `TestOutput`, `TestResult` must be defined as in Section 1.
+   - Fetch the server's `/openapi.json` (or read it from the server source) — the result DTO must match Section 1.
+   - If either is stale, **stop and report**.
+2. List every Web UI file that references the old result shape: `passed`, flat `data`, untyped `duration`. Output the file list.
+3. List every component, hook, page, and util that consumes result data.
+4. List the generated-types directory and the API client generation script paths. Confirm both are runnable.
+5. Confirm decision: SSE vs polling for live runs (whatever the server actually supports today).
+6. List every theme token / color reference touching status colors.
 
-At end of Checkpoint F:
-- Working Web UI runnable via `npm run dev` against a running Server App.
-- `next build` succeeds for production.
-- Dockerfile producing a small runnable image.
-- Passing test suite with coverage report.
-- README sufficient for a new developer to be productive in under an hour, covering: local dev, env vars, regenerating proto types, adding a custom module renderer, adding a settings tab, the schema-driven form builder.
-- An "Ambiguities resolved" log: every decision made with rationale.
+Write `webui_update/01_discovery.md`.
 
-Begin with Checkpoint A.
+### Phase 2 — Plan
+For each file from Phase 1, a concrete edit plan in dependency order:
+1. Regenerate types and API client.
+2. Add typed-value helpers and status helpers.
+3. Update `<StatusBadge>` and rendering primitives.
+4. Update the generic result renderer.
+5. Update the result table, filters, charts.
+6. Update run detail / module / compare pages.
+7. Update notifications, logs correlation, exports, reports.
+8. Update tests.
+
+Write `webui_update/02_plan.md`.
+
+### Phase 3 — Regenerate and stabilize types
+1. Run both generation scripts.
+2. Re-export canonical types from a single module.
+3. Run `tsc --noEmit`. Expect many errors downstream — that's the work; do not silence them with `any` or `@ts-ignore`. Catalog them in the phase report; they're the next phase's input.
+
+Write `webui_update/03_types_regenerated.md`.
+
+### Phase 4 — Helpers and primitives
+1. Implement `value/typed.ts` and `status/index.ts` per Sections 4.2, 4.3.
+2. Implement / update `<StatusBadge>` per Section 4.3.
+3. Unit tests for each.
+4. Run tests until green.
+
+Write `webui_update/04_helpers.md`.
+
+### Phase 5 — Generic result renderer
+1. Update `GenericResultRenderer` per Section 4.4.
+2. Verify renderer registry pattern in `registry.ts` per Section 4.5 — empty registry, generic fallback, single lookup point.
+3. Render tests across the full status × severity × map-population matrix.
+4. Subtests recursion test.
+
+Write `webui_update/05_renderer.md`.
+
+### Phase 6 — Tables, filters, charts
+1. Update `<ResultTable>` per Section 4.9.
+2. Update chart-extraction code paths to use `extractNumericSeries`.
+3. Verify TanStack Query keys and cache invalidation still match server query shapes (don't change keys casually — they break cached data across reloads, but they may need to if the API shape changed). Document.
+4. Tests: sorting, filtering, chart series.
+
+Write `webui_update/06_tables_charts.md`.
+
+### Phase 7 — Pages
+1. Update Run detail (per-module summary + drill-in + live).
+2. Update Module page (history + trend + distribution + heatmap + baseline diff + threshold editor).
+3. Update Compare page.
+4. Update Logs correlation.
+5. Update Notifications UI.
+6. Update Exports + Reports UI.
+
+Page-level tests after each.
+
+Write `webui_update/07_pages.md`.
+
+### Phase 8 — Theming and accessibility
+1. Add/update theme tokens per Section 4.15.
+2. Verify dark mode and light mode contrast for every status × severity.
+3. Keyboard nav and screen-reader labels on `<StatusBadge>`, threshold editor, and any new interactive bits.
+
+Write `webui_update/08_theming.md`.
+
+### Phase 9 — Forwards-compat and edge cases
+1. Verify unknown server-emitted status renders as `UNKNOWN` and does not crash.
+2. Verify oversized int64 from the server doesn't lose precision in JS — if `duration_ns` or any int metric can exceed `Number.MAX_SAFE_INTEGER`, decide and document handling (e.g., string fallback, bigint, display warning).
+3. Verify empty / all-skipped / aborted-with-partial states.
+
+Write `webui_update/09_edges.md`.
+
+### Phase 10 — End-to-end verification
+1. `next build` clean.
+2. `tsc --noEmit` clean.
+3. All unit tests green.
+4. All Playwright E2E green against a mocked server.
+5. Grep verification per Section 5.4. Zero hits.
+6. Manual run against the real updated Server App: launch a run, watch live results, drill in, chart a metric, set a threshold, mark baseline, compare, abort a run, view notifications, export CSV, generate a report. Capture evidence (screenshots, network captures) under `webui_update/evidence/`.
+
+Write `webui_update/10_verification.md`.
+
+### Phase 11 — Final report
+Summarize: regenerated types, helpers added, renderer changes, every page touched, theme tokens, tests added, grep result, ambiguities resolved, any deferred work (e.g., bigint precision for large int metrics if explicitly deferred).
+
+Write `webui_update/11_final_report.md`.
+
+---
+
+## 7. Hard rules
+
+- **Generated types and the server's OpenAPI are the contract.** If a hand-written type contradicts them, the hand-written type is the bug.
+- **One canonical export point for `TestResult` / related types.** No scattered imports from `generated/` across the app.
+- **`TypedValue` is never unwrapped inline.** Always through helpers in `value/typed.ts`.
+- **`Status` and `Severity` are never compared as strings inline** — always through helpers in `status/index.ts` or `<StatusBadge>`.
+- **No `switch(module_id)`** outside the renderer registry. The refactor must not introduce module-specific UI logic.
+- **No silent coercion.** Unknown statuses render as `UNKNOWN`. Numeric strings stay strings. Type mismatches surface as validation errors.
+- **No `any`, no `@ts-ignore`** introduced to make the refactor compile. Strict mode preserved.
+- **localStorage / sessionStorage prohibition stays in place** for artifacts; if this codebase isn't artifact-based, normal storage rules apply but verify the project's existing convention.
+- **No new heavyweight dependencies.** Recharts, TanStack Query, TanStack Table, ts-proto, shadcn — that's the stack.
+- **Persistent board header remains visible** on every page except login.
+- **Renderer registry stays empty** unless a module genuinely cannot be rendered generically. The refactor is not the time to introduce custom renderers.
+- **Generated code is build output** — never committed as authoritative.
+- **The server is the source of truth** for compare categorization, threshold evaluation, anomaly detection, baseline diff. UI renders; UI does not duplicate logic.
+- **Export downloads are direct server links.** No in-browser re-serialization.
+
+---
+
+## 8. Deliverables
+
+At completion of Phase 11:
+- Web UI builds clean (`next build` and `tsc --noEmit`).
+- All unit tests green; all Playwright E2E green against mocked server.
+- Generated types and API client up to date with the new OpenAPI.
+- Single canonical re-export of `TestResult`, `Status`, `Severity`, `TypedValue`.
+- `<StatusBadge>` used everywhere status is shown — no hand-rolled pills.
+- Generic renderer handles every status × severity × map-population case, plus recursive subtests, plus raw payload viewer.
+- Renderer registry remains empty (or with a documented narrow override list).
+- Module page features functional: trend, distribution, heatmap, baseline diff, threshold editor.
+- Run detail features functional: per-module summary with new status set, live streaming, drill-in chart.
+- Compare page renders every server-emitted category.
+- Notifications differentiate severity visibly.
+- Export buttons download server-emitted CSV/JSON without intermediate processing.
+- Forwards-compat `UNKNOWN` status path verified.
+- Grep verification clean.
+- All phase reports under `webui_update/01_…` through `webui_update/11_final_report.md`.
+- Evidence directory with screenshots / network captures from the live verification run.
+
+Begin with Phase 1.

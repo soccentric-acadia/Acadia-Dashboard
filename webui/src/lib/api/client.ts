@@ -5,7 +5,7 @@
 import type {
     Board,
     Run,
-    Result,
+    TestResult,
     LogEntry,
     TestConfig,
     OtaUpgrade,
@@ -14,6 +14,8 @@ import type {
     CreateRunInput,
     PaginatedRuns,
     PaginatedResults,
+    RunComparison,
+    TrendData,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -68,7 +70,7 @@ export class ApiError extends Error {
         this.name = "ApiError";
     }
     get isUnauthorized() { return this.status === 401; }
-    get isNotFound()     { return this.status === 404; }
+    get isNotFound() { return this.status === 404; }
 }
 
 // ---------------------------------------------------------------------------
@@ -181,8 +183,8 @@ export async function resumeRun(id: string): Promise<void> {
 // Runs — results
 // ---------------------------------------------------------------------------
 
-export async function fetchRunResults(runId: string, params?: { limit?: number; offset?: number }): Promise<PaginatedResults> {
-    const res = await request<{ results: Result[]; total: number }>("GET", `/api/v1/runs/${runId}/results`, undefined, params as Record<string, number | undefined>);
+export async function fetchRunResults(runId: string, params?: { limit?: number; offset?: number; module_id?: string; test_id?: string }): Promise<PaginatedResults> {
+    const res = await request<{ results: TestResult[]; total: number }>("GET", `/api/v1/runs/${runId}/results`, undefined, params as Record<string, string | number | undefined>);
     return { results: res.results ?? [], total: res.total ?? 0 };
 }
 
@@ -310,4 +312,319 @@ export async function markNotificationRead(id: string): Promise<void> {
 
 export async function markAllNotificationsRead(): Promise<void> {
     return request("POST", "/api/v1/notifications/read-all");
+}
+
+// ---------------------------------------------------------------------------
+// Schedules
+// ---------------------------------------------------------------------------
+
+export interface Schedule {
+    id: string;
+    name: string;
+    cron_expr: string;
+    config_id: string;
+    enabled: boolean;
+    created_at: string;
+    created_by: string;
+}
+
+export interface CreateScheduleInput {
+    name: string;
+    cron_expr: string;
+    config_id: string;
+}
+
+export async function fetchSchedules(): Promise<Schedule[]> {
+    const res = await request<{ schedules: Schedule[] }>("GET", "/api/v1/schedules");
+    return res.schedules ?? [];
+}
+
+export async function fetchSchedule(id: string): Promise<Schedule> {
+    return request("GET", `/api/v1/schedules/${id}`);
+}
+
+export async function createSchedule(input: CreateScheduleInput): Promise<Schedule> {
+    return request("POST", "/api/v1/schedules", input);
+}
+
+export async function updateSchedule(id: string, input: Partial<CreateScheduleInput>): Promise<Schedule> {
+    return request("PUT", `/api/v1/schedules/${id}`, input);
+}
+
+export async function deleteSchedule(id: string): Promise<void> {
+    return request("DELETE", `/api/v1/schedules/${id}`);
+}
+
+export async function enableSchedule(id: string): Promise<Schedule> {
+    return request("POST", `/api/v1/schedules/${id}/enable`);
+}
+
+export async function disableSchedule(id: string): Promise<Schedule> {
+    return request("POST", `/api/v1/schedules/${id}/disable`);
+}
+
+// ---------------------------------------------------------------------------
+// Templates
+// ---------------------------------------------------------------------------
+
+export interface Template {
+    id: string;
+    name: string;
+    description: string;
+    module_id: string;
+    config_snapshot: unknown;
+    archived: boolean;
+    created_at: string;
+    created_by: string;
+}
+
+export interface CreateTemplateInput {
+    name: string;
+    description?: string;
+    module_id: string;
+    config_snapshot: unknown;
+}
+
+export async function fetchTemplates(): Promise<Template[]> {
+    const res = await request<{ templates: Template[] }>("GET", "/api/v1/templates");
+    return res.templates ?? [];
+}
+
+export async function fetchTemplate(id: string): Promise<Template> {
+    return request("GET", `/api/v1/templates/${id}`);
+}
+
+export async function createTemplate(input: CreateTemplateInput): Promise<Template> {
+    return request("POST", "/api/v1/templates", input);
+}
+
+export async function updateTemplate(id: string, input: Partial<CreateTemplateInput>): Promise<Template> {
+    return request("PUT", `/api/v1/templates/${id}`, input);
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+    return request("DELETE", `/api/v1/templates/${id}`);
+}
+
+export async function archiveTemplate(id: string): Promise<Template> {
+    return request("POST", `/api/v1/templates/${id}/archive`);
+}
+
+export async function instantiateTemplate(id: string, name: string): Promise<import("./types").TestConfig> {
+    return request("POST", `/api/v1/templates/${id}/instantiate`, { name });
+}
+
+// ---------------------------------------------------------------------------
+// Global logs + bookmarks + saved views
+// ---------------------------------------------------------------------------
+
+export async function fetchGlobalLogs(filter: import("./client").LogFilter & { run_id?: string } = {}): Promise<import("./types").LogEntry[]> {
+    const res = await request<{ logs: import("./types").LogEntry[] }>("GET", "/api/v1/logs", undefined, filter as Record<string, string>);
+    return res.logs ?? [];
+}
+
+export async function searchLogs(q: string, params: { limit?: number; offset?: number } = {}): Promise<import("./types").LogEntry[]> {
+    const res = await request<{ logs: import("./types").LogEntry[] }>("GET", "/api/v1/logs/search", undefined, { q, ...params } as Record<string, string | number>);
+    return res.logs ?? [];
+}
+
+export interface LogBookmark {
+    id: string;
+    log_id: string;
+    note: string;
+    created_at: string;
+}
+
+export async function fetchLogBookmarks(): Promise<LogBookmark[]> {
+    const res = await request<{ bookmarks: LogBookmark[] }>("GET", "/api/v1/logs/bookmarks");
+    return res.bookmarks ?? [];
+}
+
+export async function createLogBookmark(log_id: string, note = ""): Promise<LogBookmark> {
+    return request("POST", "/api/v1/logs/bookmarks", { log_id, note });
+}
+
+export async function deleteLogBookmark(id: string): Promise<void> {
+    return request("DELETE", `/api/v1/logs/bookmarks/${id}`);
+}
+
+export interface SavedView {
+    id: string;
+    name: string;
+    filter_json: string;
+    created_at: string;
+}
+
+export async function fetchSavedViews(): Promise<SavedView[]> {
+    const res = await request<{ views: SavedView[] }>("GET", "/api/v1/logs/views");
+    return res.views ?? [];
+}
+
+export async function createSavedView(name: string, filter_json: string): Promise<SavedView> {
+    return request("POST", "/api/v1/logs/views", { name, filter_json });
+}
+
+// ---------------------------------------------------------------------------
+// Alert rules
+// ---------------------------------------------------------------------------
+
+export interface AlertRule {
+    id: string;
+    module_id: string;
+    field_path: string;
+    operator: ">" | "<" | ">=" | "<=" | "==";
+    threshold: number;
+    severity: "info" | "warning" | "critical";
+    enabled: boolean;
+    created_at: string;
+}
+
+export interface CreateAlertInput {
+    module_id: string;
+    field_path: string;
+    operator: string;
+    threshold: number;
+    severity: string;
+}
+
+export async function fetchAlertRules(): Promise<AlertRule[]> {
+    const res = await request<{ rules: AlertRule[] }>("GET", "/api/v1/alerts");
+    return res.rules ?? [];
+}
+
+export async function fetchAlertRule(id: string): Promise<AlertRule> {
+    return request("GET", `/api/v1/alerts/${id}`);
+}
+
+export async function createAlertRule(input: CreateAlertInput): Promise<AlertRule> {
+    return request("POST", "/api/v1/alerts", input);
+}
+
+export async function updateAlertRule(id: string, input: Partial<CreateAlertInput>): Promise<AlertRule> {
+    return request("PUT", `/api/v1/alerts/${id}`, input);
+}
+
+export async function deleteAlertRule(id: string): Promise<void> {
+    return request("DELETE", `/api/v1/alerts/${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Run extras: delete, baseline, rerun, export, report
+// ---------------------------------------------------------------------------
+
+export async function deleteRun(id: string): Promise<void> {
+    return request("DELETE", `/api/v1/runs/${id}`);
+}
+
+export async function setBaseline(id: string): Promise<void> {
+    return request("POST", `/api/v1/runs/${id}/baseline`);
+}
+
+export async function rerunRun(id: string): Promise<import("./types").Run> {
+    return request("POST", `/api/v1/runs/${id}/rerun`);
+}
+
+export async function exportRun(id: string, format: "csv" | "json" = "json"): Promise<Blob> {
+    const url = apiUrl(`/api/v1/runs/${id}/export`, { format });
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
+    return res.blob();
+}
+
+export async function fetchRunReport(id: string): Promise<string> {
+    const url = apiUrl(`/api/v1/runs/${id}/report`);
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
+    return res.text();
+}
+
+// ---------------------------------------------------------------------------
+// Run comparison
+// ---------------------------------------------------------------------------
+
+/**
+ * Server-side run comparison: returns categorised diffs for every (module_id, test_id) pair.
+ * Categorisation (improved/regressed/drifted/etc.) comes from the server.
+ * The UI renders; it does NOT duplicate categorisation logic.
+ */
+export async function fetchRunCompare(runAId: string, runBId: string): Promise<RunComparison> {
+    return request("GET", `/api/v1/runs/${encodeURIComponent(runAId)}/compare/${encodeURIComponent(runBId)}`);
+}
+
+// ---------------------------------------------------------------------------
+// Module-scoped results and trend
+// ---------------------------------------------------------------------------
+
+/** Paginated results across all runs for a given module. */
+export async function fetchModuleResults(
+    moduleId: string,
+    params?: { limit?: number; offset?: number; test_id?: string; run_id?: string },
+): Promise<PaginatedResults> {
+    const res = await request<{ results: TestResult[]; total: number }>(
+        "GET",
+        `/api/v1/modules/${encodeURIComponent(moduleId)}/results`,
+        undefined,
+        params as Record<string, string | number | undefined>,
+    );
+    return { results: res.results ?? [], total: res.total ?? 0 };
+}
+
+/**
+ * Numeric time-series for a specific (module, test, metric) triplet across runs.
+ * Server returns only numeric values — non-numeric metrics are not included.
+ */
+export async function fetchModuleTrend(
+    moduleId: string,
+    testId: string,
+    metricKey: string,
+    source: "metrics" | "monitoring" | "event" = "metrics",
+    from?: string,
+    to?: string,
+): Promise<TrendData> {
+    return request("GET", `/api/v1/modules/${encodeURIComponent(moduleId)}/trend`, undefined, {
+        test_id: testId,
+        field: metricKey,
+        source,
+        from,
+        to,
+    } as Record<string, string | undefined>);
+}
+
+/** POST a threshold spec to the server. Evaluates against future results. */
+export async function createThreshold(input: CreateAlertInput): Promise<AlertRule> {
+    return createAlertRule(input);
+}
+
+/** DELETE a threshold. */
+export async function deleteThreshold(id: string): Promise<void> {
+    return deleteAlertRule(id);
+}
+
+// ---------------------------------------------------------------------------
+// Settings / retention
+// ---------------------------------------------------------------------------
+
+export interface RetentionSettings {
+    retention_days: number;
+    max_run_results: number;
+}
+
+export async function fetchRetentionSettings(): Promise<RetentionSettings> {
+    return request("GET", "/api/v1/settings/retention");
+}
+
+export async function updateRetentionSettings(s: Partial<RetentionSettings>): Promise<RetentionSettings> {
+    return request("PUT", "/api/v1/settings/retention", s);
+}
+
+// ---------------------------------------------------------------------------
+// Auth extras: change password, delete board
+// ---------------------------------------------------------------------------
+
+export async function changePassword(old_password: string, new_password: string): Promise<void> {
+    return request("PATCH", "/api/v1/auth/password", { old_password, new_password });
+}
+
+export async function deleteBoard(): Promise<void> {
+    return request("DELETE", "/api/v1/target");
 }

@@ -29,6 +29,26 @@ export function formatDuration(ms: number): string {
     if (m > 0) return `${m}m ${s % 60}s`;
     return `${s}s`;
 }
+
+/**
+ * Format a duration expressed in nanoseconds for human display.
+ * Handles the int64 precision caveat: values > Number.MAX_SAFE_INTEGER are
+ * marked with a "~" prefix to indicate potential display loss.
+ */
+export function formatDurationNs(ns: number): string {
+    if (!Number.isFinite(ns) || ns < 0) return "—";
+    const approx = ns > Number.MAX_SAFE_INTEGER ? "~" : "";
+    if (ns < 1_000) return `${approx}${ns}ns`;
+    if (ns < 1_000_000) return `${approx}${(ns / 1_000).toFixed(1)}µs`;
+    if (ns < 1_000_000_000) return `${approx}${(ns / 1_000_000).toFixed(1)}ms`;
+    const s = ns / 1_000_000_000;
+    const m = Math.floor(s / 60);
+    const h = Math.floor(m / 60);
+    if (h > 0) return `${approx}${h}h ${m % 60}m ${(s % 60).toFixed(0)}s`;
+    if (m > 0) return `${approx}${m}m ${(s % 60).toFixed(1)}s`;
+    return `${approx}${s.toFixed(3)}s`;
+}
+
 export function getModuleLabel(moduleId: string | undefined | null): string {
     if (!moduleId) return "";
     return moduleId

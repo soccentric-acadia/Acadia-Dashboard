@@ -1,5 +1,76 @@
 // REST API types derived from Acadia-Server's actual JSON responses.
 // Field names match Server C++ serializers exactly.
+// Single canonical export point for all result-related types — import from here, not from generated/.
+
+// ── Test result canonical types ────────────────────────────────────────────
+
+/**
+ * Six-valued test status matching HAL TestStatus enum.
+ * Server emits uppercase strings. Any other value from the server renders as "UNKNOWN" in the UI.
+ */
+export type Status =
+    | "PASS"
+    | "FAIL"
+    | "ERROR"
+    | "TIMEOUT"
+    | "SKIPPED"
+    | "ABORTED";
+
+/** Four-valued test severity matching HAL TestSeverity enum. */
+export type Severity = "INFO" | "WARNING" | "ERROR" | "CRITICAL";
+
+/**
+ * Discriminated union matching HAL TypedValue oneof.
+ * The `int` variant carries int64; values > Number.MAX_SAFE_INTEGER are lossy in JS.
+ * All unwrapping must go through helpers in src/lib/value/typed.ts — never inline.
+ */
+export type TypedValue =
+    | { type: "bool"; value: boolean }
+    | { type: "int"; value: number }
+    | { type: "double"; value: number }
+    | { type: "string"; value: string };
+
+/**
+ * Individual test result — matches result_to_json() in RunsController.
+ * Subtests are recursive (same shape).
+ */
+export interface TestResult {
+    id: string;
+    run_id: string;
+    module_id: string;
+    /** Server stores module_version as a string (version tag, not int). */
+    module_version: string;
+    test_id: string;
+    name: string;
+    /** Monotonically increasing within a run. Drives ordering, not arrival time. */
+    sequence: number;
+    /** ISO 8601 UTC. */
+    timestamp: string;
+    /** Nanoseconds (int64). Use formatDurationNs() for display. */
+    duration_ns: number;
+    /** Test execution mode. */
+    mode: TestMode;
+    status: Status;
+    severity: Severity;
+    /** Non-empty only when status ∈ {ERROR, TIMEOUT, ABORTED}. */
+    error_message: string;
+    /** Human-readable key-value explanation pairs. */
+    reason: Record<string, string>;
+    /** Measured numeric/typed values. */
+    metrics: Record<string, TypedValue>;
+    /** Environmental readings (MONITORING mode). */
+    monitoring: Record<string, TypedValue>;
+    /** Event payload fields (EVENT_BASED mode). */
+    event: Record<string, TypedValue>;
+    subtests: TestResult[];
+    payload_type_url: string;
+    payload_b64: string;
+}
+
+/** Backward-compat alias — migrating consumers should switch to TestResult. */
+export type Result = TestResult;
+
+// ── Matches Server runs.status CHECK constraint ────────────────────────────
 
 /** Matches Server runs.status CHECK constraint */
 export type RunStatus =
@@ -48,20 +119,6 @@ export interface Run {
     started_at: string | null;
     ended_at: string | null;
     tags: Record<string, unknown>;
-}
-
-/** Individual result record — matches ResultRepository */
-export interface Result {
-    id: string;
-    run_id: string;
-    module_id: string;
-    module_version: string;
-    timestamp: string;
-    mode: TestMode;
-    status: "pass" | "fail" | "error" | "unknown";
-    error_message: string;
-    payload_type_url: string;
-    payload: Record<string, unknown>;
 }
 
 export interface LogEntry {
@@ -154,8 +211,61 @@ export interface PaginatedRuns {
 }
 
 export interface PaginatedResults {
-    results: Result[];
+    results: TestResult[];
     total: number;
+}
+
+// ── Compare endpoint types ────────────────────────────────────────────────
+
+export type CompareCategory =
+    | "unchanged"
+    | "improved"
+    | "regressed"
+    | "drifted"
+    | "disappeared"
+    | "appeared";
+
+export interface MetricDiff {
+    a: TypedValue | null;
+    b: TypedValue | null;
+    /** Numeric delta (b - a); null for non-numeric or missing. */
+    delta: number | null;
+}
+
+/** One row in a run comparison — server-categorised. */
+export interface CompareRow {
+    module_id: string;
+    test_id: string;
+    name: string;
+    status_a: Status | null;
+    status_b: Status | null;
+    severity_a: Severity | null;
+    severity_b: Severity | null;
+    category: CompareCategory;
+    metrics_drift: Record<string, MetricDiff>;
+}
+
+export interface RunComparison {
+    run_a_id: string;
+    run_b_id: string;
+    rows: CompareRow[];
+}
+
+// ── Module trend types ────────────────────────────────────────────────────
+
+export interface TrendPoint {
+    run_id: string;
+    run_name: string;
+    timestamp: string;
+    value: number;
+}
+
+export interface TrendData {
+    module_id: string;
+    test_id: string;
+    metric_key: string;
+    source: "metrics" | "monitoring" | "event";
+    points: TrendPoint[];
 }
 
 // ── SSE live update events ────────────────────────────────────────────────
@@ -169,7 +279,7 @@ export interface RunStateEvent {
 export interface RunResultEvent {
     type: "result";
     run_id: string;
-    result: Result;
+    result: TestResult;
 }
 
 export type RunSSEEvent = RunStateEvent | RunResultEvent;

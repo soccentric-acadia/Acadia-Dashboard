@@ -12,8 +12,15 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
     Bell, Database, Monitor, Wifi, Wrench, User, Cpu,
-    Plus, Server,
+    Plus, Server, KeyRound, Save, AlertCircle, Trash2,
 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+    changePassword, fetchRetentionSettings, updateRetentionSettings,
+    listApiTokens, createApiToken, revokeApiToken,
+    fetchAlertRules, createAlertRule, deleteAlertRule,
+    type RetentionSettings, type AlertRule, type CreateAlertInput,
+} from "@/lib/api/client";
 import { useBoard } from "@/lib/board/context";
 import { getSessionUser } from "@/lib/auth/session";
 
@@ -185,6 +192,114 @@ function NetworkTab() {
 
 // ── Stub tabs ──────────────────────────────────────────────────────────────
 
+function AlertsTab() {
+    const qc = useQueryClient();
+    const { data: rules = [], isLoading } = useQuery<AlertRule[]>({
+        queryKey: ["alert-rules"],
+        queryFn: fetchAlertRules,
+    });
+
+    const [form, setForm] = useState<CreateAlertInput>({
+        module_id: "", field_path: "", operator: ">", threshold: 0, severity: "warning",
+    });
+    const [showForm, setShowForm] = useState(false);
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: string) => deleteAlertRule(id),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ["alert-rules"] }); toast.success("Rule deleted"); },
+        onError: (e: Error) => toast.error(e.message),
+    });
+
+    const createMutation = useMutation({
+        mutationFn: (input: CreateAlertInput) => createAlertRule(input),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["alert-rules"] });
+            toast.success("Alert rule created");
+            setShowForm(false);
+            setForm({ module_id: "", field_path: "", operator: ">", threshold: 0, severity: "warning" });
+        },
+        onError: (e: Error) => toast.error(e.message),
+    });
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Bell className="h-4 w-4" />Alert rules
+                </CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setShowForm(v => !v)}>
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />{showForm ? "Cancel" : "Add rule"}
+                </Button>
+            </div>
+
+            {showForm && (
+                <div className="rounded-md border p-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className="text-xs text-muted-foreground">Module ID</label>
+                            <Input value={form.module_id} onChange={e => setForm(f => ({...f, module_id: e.target.value}))} placeholder="e.g. cpu" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground">Field path</label>
+                            <Input value={form.field_path} onChange={e => setForm(f => ({...f, field_path: e.target.value}))} placeholder="e.g. temperature" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground">Operator</label>
+                            <select
+                                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                value={form.operator}
+                                onChange={e => setForm(f => ({...f, operator: e.target.value}))}
+                            >
+                                {[">", "<", ">=", "<=", "=="].map(op => <option key={op}>{op}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground">Threshold</label>
+                            <Input type="number" value={form.threshold} onChange={e => setForm(f => ({...f, threshold: parseFloat(e.target.value) || 0}))} />
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground">Severity</label>
+                            <select
+                                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                value={form.severity}
+                                onChange={e => setForm(f => ({...f, severity: e.target.value}))}
+                            >
+                                <option value="info">Info</option>
+                                <option value="warning">Warning</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+                    <Button size="sm" onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending || !form.module_id || !form.field_path}>
+                        <Save className="h-3.5 w-3.5 mr-1.5" />Create rule
+                    </Button>
+                </div>
+            )}
+
+            {isLoading && <Skeleton className="h-12 w-full" />}
+            {!isLoading && rules.length === 0 && !showForm && (
+                <p className="text-sm text-muted-foreground">No alert rules configured.</p>
+            )}
+            <div className="space-y-2">
+                {rules.map(r => (
+                    <div key={r.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                        <div>
+                            <span className="font-mono text-xs">{r.module_id}.{r.field_path}</span>
+                            <span className="ml-2 text-muted-foreground">{r.operator} {r.threshold}</span>
+                            <span className={`ml-2 text-xs font-medium ${r.severity === "critical" ? "text-red-500" : r.severity === "warning" ? "text-yellow-500" : "text-blue-500"}`}>
+                                [{r.severity}]
+                            </span>
+                        </div>
+                        <Button size="sm" variant="ghost" className="text-destructive h-7" onClick={() => deleteMutation.mutate(r.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function StubTab({ label }: { label: string }) {
     return (
         <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
@@ -204,6 +319,7 @@ const TABS = [
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "data", label: "Data", icon: Database },
     { id: "display", label: "Display", icon: Monitor },
+    { id: "alerts", label: "Alerts", icon: Bell },
     { id: "advanced", label: "Advanced", icon: Wrench },
 ];
 
@@ -241,8 +357,9 @@ function SettingsContent() {
                         <TabsContent value="account"><Card><CardContent className="pt-6"><AccountTab /></CardContent></Card></TabsContent>
                         <TabsContent value="network"><Card><CardContent className="pt-6"><NetworkTab /></CardContent></Card></TabsContent>
                         <TabsContent value="notifications"><Card><CardContent className="pt-6"><StubTab label="Notification preferences" /></CardContent></Card></TabsContent>
-                        <TabsContent value="data"><Card><CardContent className="pt-6"><StubTab label="Data retention and backup" /></CardContent></Card></TabsContent>
+                        <TabsContent value="data"><Card><CardContent className="pt-6"><DataTab /></CardContent></Card></TabsContent>
                         <TabsContent value="display"><Card><CardContent className="pt-6"><StubTab label="Display preferences" /></CardContent></Card></TabsContent>
+                        <TabsContent value="alerts"><Card><CardContent className="pt-6"><AlertsTab /></CardContent></Card></TabsContent>
                         <TabsContent value="advanced"><Card><CardContent className="pt-6"><StubTab label="Advanced settings and audit log" /></CardContent></Card></TabsContent>
                     </div>
                 </Tabs>

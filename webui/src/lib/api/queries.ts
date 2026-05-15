@@ -1,7 +1,8 @@
 // TanStack Query hooks for all Acadia server state.
 // Hooks use the REST client functions from ./client.
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import {
     fetchHealth,
     fetchBoard,
@@ -28,12 +29,17 @@ import {
     fetchNotificationCount,
     markNotificationRead,
     markAllNotificationsRead,
+    fetchModuleResults,
+    fetchModuleTrend,
+    fetchRunCompare,
     type RunsFilter,
     type LogFilter,
 } from "./client";
+import { getSSEClient } from "./ws";
 import type {
     Run,
     RunStatus,
+    TestResult,
     CreateRunInput,
     CreateConfigInput,
 } from "./types";
@@ -45,8 +51,11 @@ export const keys = {
     board: ["board"] as const,
     runs: (f?: RunsFilter) => ["runs", f ?? {}] as const,
     run: (id: string) => ["run", id] as const,
-    runResults: (id: string) => ["run", id, "results"] as const,
+    runResults: (id: string, params?: Record<string, unknown>) => ["run", id, "results", params ?? {}] as const,
     runLogs: (id: string, f?: LogFilter) => ["run", id, "logs", f ?? {}] as const,
+    moduleResults: (id: string, params?: Record<string, unknown>) => ["module", id, "results", params ?? {}] as const,
+    moduleTrend: (id: string, testId: string, metricKey: string, source?: string) => ["module", id, "trend", testId, metricKey, source ?? "metrics"] as const,
+    runCompare: (a: string, b: string) => ["run-compare", a, b] as const,
     configs: ["configs"] as const,
     config: (id: string) => ["config", id] as const,
     modules: ["modules"] as const,
@@ -110,9 +119,9 @@ export function useActiveRun(id: string) {
     });
 }
 
-export function useRunResults(runId: string, params?: { limit?: number; offset?: number }) {
+export function useRunResults(runId: string, params?: { limit?: number; offset?: number; module_id?: string; test_id?: string }) {
     return useQuery({
-        queryKey: keys.runResults(runId),
+        queryKey: keys.runResults(runId, params),
         queryFn: () => fetchRunResults(runId, params),
         enabled: Boolean(runId),
     });
@@ -123,6 +132,107 @@ export function useRunLogs(runId: string | null | undefined, filter: LogFilter =
         queryKey: keys.runLogs(runId ?? "", filter),
         queryFn: () => fetchRunLogs(runId!, filter),
         enabled: Boolean(runId),
+    });
+}
+
+/**
+ * useRunSSE — wires live SSE events into the TanStack Query cache.
+ * On `result` events: appends new result to the runResults cache.
+ * On `state` events: updates the run status in the run cache.
+ * Only active when the run is in a live state.
+ */
+export function useRunSSE(runId: string, active: boolean) {
+    const qc = useQueryClient();
+    const runIdRef = useRef(runId);
+    runIdRef.current = runId;
+
+    useEffect(() => {
+        if (!active || !runId) return;
+        const sse = getSSEClient();
+        sse.subscribe(runId);
+
+        const handler = (event: import("./types").RunSSEEvent) => {
+            if (event.run_id !== runIdRef.current) return;
+
+            if (event.type === "result") {
+                // Append result to all cached runResults pages for this run
+                qc.setQueriesData<import("./types").PaginatedResults>(
+                    { queryKey: ["run", runId, "results"] },
+                    (old) => {
+                        if (!old) return old;
+                        // Avoid duplicates by sequence number
+                        const exists = old.results.some((r) => r.sequence === event.result.sequence && r.test_id === event.result.test_id);
+                        if (exists) return old;
+                        return {
+                            ...old,
+                            results: [...old.results, event.result],
+                            total: old.total + 1,
+                        };
+                    },
+                );
+            }
+
+            if (event.type === "state") {
+                // Update run status in cache
+                qc.setQueryData<import("./types").Run>(
+                    keys.run(runId),
+                    (old) => old ? { ...old, status: event.status } : old,
+                );
+                // If terminal, stop polling and invalidate to get final state
+                const terminal: RunStatus[] = ["completed", "failed", "cancelled"];
+                if (terminal.includes(event.status as RunStatus)) {
+                    qc.invalidateQueries({ queryKey: keys.run(runId) });
+                    qc.invalidateQueries({ queryKey: ["run", runId, "results"] });
+                }
+            }
+        };
+
+        sse.on(handler);
+        return () => {
+            sse.off(handler);
+            sse.unsubscribe(runId);
+        };
+    }, [runId, active, qc]);
+}
+
+// ── Module hooks ──────────────────────────────────────────────────────────────
+
+export function useModuleResults(
+    moduleId: string,
+    params?: { limit?: number; offset?: number; test_id?: string; run_id?: string },
+) {
+    return useQuery({
+        queryKey: keys.moduleResults(moduleId, params),
+        queryFn: () => fetchModuleResults(moduleId, params),
+        enabled: Boolean(moduleId),
+        staleTime: 10_000,
+    });
+}
+
+export function useModuleTrend(
+    moduleId: string,
+    testId: string,
+    metricKey: string,
+    source: "metrics" | "monitoring" | "event" = "metrics",
+    from?: string,
+    to?: string,
+) {
+    return useQuery({
+        queryKey: keys.moduleTrend(moduleId, testId, metricKey, source),
+        queryFn: () => fetchModuleTrend(moduleId, testId, metricKey, source, from, to),
+        enabled: Boolean(moduleId) && Boolean(testId) && Boolean(metricKey),
+        staleTime: 30_000,
+    });
+}
+
+// ── Run comparison ────────────────────────────────────────────────────────────
+
+export function useRunCompare(runAId: string, runBId: string) {
+    return useQuery({
+        queryKey: keys.runCompare(runAId, runBId),
+        queryFn: () => fetchRunCompare(runAId, runBId),
+        enabled: Boolean(runAId) && Boolean(runBId),
+        staleTime: 60_000,
     });
 }
 

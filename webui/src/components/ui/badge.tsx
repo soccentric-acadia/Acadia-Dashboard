@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 const Badge = React.forwardRef<
     HTMLDivElement,
     React.HTMLAttributes<HTMLDivElement> & {
-        variant?: "default" | "secondary" | "destructive" | "outline" | "success" | "warning";
+        variant?: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "timeout" | "skipped" | "aborted" | "unknown";
     }
 >(({ className, variant = "default", ...props }, ref) => {
     const variantClasses = {
@@ -14,6 +14,10 @@ const Badge = React.forwardRef<
         outline: "text-foreground border border-input",
         success: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
         warning: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+        timeout: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+        skipped: "bg-muted text-muted-foreground",
+        aborted: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+        unknown: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-dashed border-gray-400",
     };
     return (
         <div

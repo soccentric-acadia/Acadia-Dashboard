@@ -3,37 +3,43 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Download } from "lucide-react";
+import { FileText, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useRuns } from "@/lib/api/queries";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
+import { fetchRunReport } from "@/lib/api/client";
 
 export default function ReportsPage() {
-    const { data: runsData } = useRuns({ limit: 20 });
+    const { data: runsData } = useRuns({ limit: 50 });
     const runs = runsData?.runs ?? [];
 
-    const completedRuns = runs.filter((r) => r.status === "completed" || r.status === "cancelled" || r.status === "failed");
+    const completedRuns = runs.filter(
+        (r) => r.status === "completed" || r.status === "cancelled" || r.status === "failed"
+    );
 
-    const handleGenerate = (runId: string) => {
-        toast.info(`Report generation for run ${runId.slice(0, 8)}… coming soon.`);
+    const handleHtml = async (runId: string) => {
+        try {
+            const html = await fetchRunReport(runId);
+            const blob = new Blob([html], { type: "text/html" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `run-${runId.slice(0, 8)}-report.html`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) { toast.error((e as Error).message); }
     };
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-                    <p className="text-sm text-muted-foreground mt-1">Generate and manage run reports.</p>
-                </div>
-                <Button size="sm" onClick={() => toast.info("Scheduled reports coming soon.")}>
-                    <Plus className="h-3.5 w-3.5 mr-1.5" />
-                    Schedule report
-                </Button>
+            <div>
+                <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
+                <p className="text-sm text-muted-foreground mt-1">Generate and download run reports.</p>
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base">Generate one-off report</CardTitle>
+                    <CardTitle className="text-base">Download run report</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {completedRuns.length === 0 ? (
@@ -43,7 +49,7 @@ export default function ReportsPage() {
                             {completedRuns.map((run) => (
                                 <div key={run.id} className="flex items-center justify-between py-3 gap-4">
                                     <div className="min-w-0">
-                                        <p className="text-sm font-medium font-mono truncate">{run.id.slice(0, 12)}…</p>
+                                        <p className="text-sm font-medium font-mono truncate">{run.name || run.id.slice(0, 12) + "…"}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <Badge variant="outline" className="text-xs capitalize">{run.mode}</Badge>
                                             <RunStateBadge state={run.status} />
@@ -52,23 +58,9 @@ export default function ReportsPage() {
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleGenerate(run.id)}
-                                        >
-                                            <Download className="h-3.5 w-3.5 mr-1.5" />
-                                            PDF
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => handleGenerate(run.id)}
-                                        >
-                                            HTML
-                                        </Button>
-                                    </div>
+                                    <Button size="sm" variant="outline" onClick={() => handleHtml(run.id)}>
+                                        <Download className="h-3.5 w-3.5 mr-1.5" />HTML
+                                    </Button>
                                 </div>
                             ))}
                         </div>
