@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useCreateRun, useConfigs } from "@/lib/api/queries";
@@ -14,9 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { TestMode, TestConfig } from "@/lib/api/types";
 import {
-  Check, ChevronRight, ChevronLeft, Play, Clock, Eye, Zap, Boxes, FileText, AlertCircle,
+  Check, ChevronRight, ChevronLeft, Play, Clock, Eye, Zap, Boxes, FileText,
 } from "lucide-react";
-import { pageVariants } from "@/components/motion/presets";
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
 

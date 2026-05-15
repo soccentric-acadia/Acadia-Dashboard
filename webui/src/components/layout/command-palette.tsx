@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/command";
 import {
     LayoutDashboard, Play, PlusCircle, BookMarked, CalendarClock,
-    ScrollText, FileText, Upload, Settings, HelpCircle, Cpu,
+    ScrollText, FileText, Upload, Settings, HelpCircle,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getModuleRegistry } from "@/lib/proto/registry";

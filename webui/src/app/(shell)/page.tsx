@@ -11,7 +11,6 @@ import { KpiCard } from "@/components/primitives/kpi-card";
 import { SectionCard } from "@/components/primitives/section-card";
 import { LiveDot } from "@/components/primitives/live-dot";
 import { ModuleIcon } from "@/components/primitives/module-icon";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";

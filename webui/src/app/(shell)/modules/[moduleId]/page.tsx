@@ -6,7 +6,7 @@ import { use } from "react";
 import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { getModuleRegistry } from "@/lib/proto/registry";
-import { getModuleLabel, formatRelativeTime, formatDurationNs, cn } from "@/lib/utils";
+import { getModuleLabel, cn } from "@/lib/utils";
 import { useModuleResults } from "@/lib/api/queries";
 import { ModuleIcon } from "@/components/primitives/module-icon";
 import { LiveDot } from "@/components/primitives/live-dot";
@@ -17,7 +17,6 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { ResultTable } from "@/components/results/result-table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,

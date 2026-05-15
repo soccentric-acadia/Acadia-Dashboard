@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { motion } from "motion/react";
-import { Calendar, Clock, Plus } from "lucide-react";
+import { Calendar, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SectionCard } from "@/components/primitives/section-card";
 import { pageVariants } from "@/components/motion/presets";

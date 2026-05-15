@@ -2,9 +2,7 @@
 import * as React from "react";
 import { motion } from "motion/react";
 import { SectionCard } from "@/components/primitives/section-card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { HelpCircle, BookOpen, Terminal, Keyboard, Activity } from "lucide-react";
+import {  BookOpen, Terminal, Activity } from "lucide-react";
 import { pageVariants } from "@/components/motion/presets";
 
 const SHORTCUTS = [
@@ -27,7 +25,7 @@ export default function HelpPage() {
         <h1 className="text-xl font-bold">Help</h1>
         <p className="text-sm text-muted-foreground">Acadia IV&V Dashboard reference</p>
       </div>
-      <SectionCard title="Keyboard Shortcuts">
+      <SectionCard title="Shortcuts">
         <div className="space-y-2">
           {SHORTCUTS.map(({ keys, description }) => (
             <div key={description} className="flex items-center justify-between text-sm">

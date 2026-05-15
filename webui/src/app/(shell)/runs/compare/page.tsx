@@ -13,9 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, GitCompare, ArrowRight, Check, X } from "lucide-react";
+import { ArrowLeft, GitCompare, ArrowRight } from "lucide-react";
 import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
-import type { RunStatus, Status, CompareRow } from "@/lib/api/types";
+import type { RunStatus, Status } from "@/lib/api/types";
 import { isFailureStatus } from "@/lib/status";
 import { pageVariants } from "@/components/motion/presets";
 

@@ -31,7 +31,7 @@ import {
 import {
     LayoutDashboard, Play, PlusCircle, BookMarked, CalendarClock,
     ScrollText, FileText, Upload, Settings, HelpCircle, Search,
-    Moon, Sun, Monitor, Cpu, Wifi, WifiOff,
+    Moon, Sun, Monitor, Cpu, WifiOff,
 } from "lucide-react";
 
 const NAV_ITEMS = [

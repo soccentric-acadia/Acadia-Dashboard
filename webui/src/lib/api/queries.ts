@@ -1,7 +1,7 @@
 // TanStack Query hooks for all Acadia server state.
 // Hooks use the REST client functions from ./client.
 
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import {
     fetchHealth,
@@ -39,7 +39,7 @@ import { getSSEClient } from "./ws";
 import type {
     Run,
     RunStatus,
-    TestResult,
+    
     CreateRunInput,
     CreateConfigInput,
 } from "./types";

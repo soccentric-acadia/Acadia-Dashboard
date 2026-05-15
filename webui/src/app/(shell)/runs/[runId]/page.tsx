@@ -8,7 +8,6 @@ import { useRun, useRunResults, useRunSSE, useCancelRun, usePauseRun, useResumeR
 import { LiveDot } from "@/components/primitives/live-dot";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ResultTable } from "@/components/results/result-table";
 import { SectionCard } from "@/components/primitives/section-card";
 import { CountUp } from "@/components/primitives/count-up";
 import { Button } from "@/components/ui/button";
@@ -16,12 +15,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Square, Pause, Play, GitCompare, Download, Loader2,
-  CheckCircle2, XCircle, Clock, AlertCircle,
+  ArrowLeft, Square, Pause, Play, GitCompare, Loader2,
+  CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
 import type { Run, TestResult, RunStatus, Status } from "@/lib/api/types";

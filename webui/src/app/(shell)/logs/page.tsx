@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Search, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pageVariants } from "@/components/motion/presets";
@@ -43,10 +42,10 @@ export default function LogsPage() {
           <p className="text-sm text-muted-foreground">{runId ? `Run ${runId.slice(0, 12)}` : "System logs"}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={level} onValueChange={setLevel}>
+          <Select value={level || "all"} onValueChange={(v) => setLevel(v === "all" ? "" : v)}>
             <SelectTrigger className="h-8 w-28 text-xs"><SelectValue placeholder="All levels" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="ERROR">ERROR</SelectItem>
               <SelectItem value="WARN">WARN</SelectItem>
               <SelectItem value="INFO">INFO</SelectItem>

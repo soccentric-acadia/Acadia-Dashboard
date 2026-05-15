@@ -16,7 +16,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge, SeverityChip } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
@@ -27,7 +26,7 @@ import { formatDurationNs, formatRelativeTime } from "@/lib/utils";
 import { toDisplayString, isNumeric } from "@/lib/value/typed";
 import { shouldShowSeverity } from "@/lib/status";
 import { getModuleLabel } from "@/lib/utils";
-import type { TestResult, TypedValue, Severity } from "@/lib/api/types";
+import type { TestResult, TypedValue } from "@/lib/api/types";
 
 export interface ResultRendererProps {
     result: TestResult;

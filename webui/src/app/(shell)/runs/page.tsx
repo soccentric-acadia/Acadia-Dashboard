@@ -6,14 +6,13 @@ import { motion } from "motion/react";
 import { useRuns } from "@/lib/api/queries";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, GitCompare, ChevronRight, Search } from "lucide-react";
+import { Plus, GitCompare, ChevronRight } from "lucide-react";
 import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
-import type { Run, RunStatus } from "@/lib/api/types";
+import type { RunStatus } from "@/lib/api/types";
 import { pageVariants } from "@/components/motion/presets";
 
 export default function RunsPage() {
@@ -31,10 +30,10 @@ export default function RunsPage() {
           <p className="text-sm text-muted-foreground">All test run history</p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={status} onValueChange={setStatus}>
+          <Select value={status || "all"} onValueChange={(v) => setStatus(v === "all" ? "" : v)}>
             <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="All statuses" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="running">Running</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
@@ -45,7 +44,7 @@ export default function RunsPage() {
             <Link href="/runs/compare"><GitCompare className="h-3.5 w-3.5" /> Compare</Link>
           </Button>
           <Button size="sm" className="h-8 gap-1.5 text-xs" asChild>
-            <Link href="/runs/new"><Plus className="h-3.5 w-3.5" /> New Run</Link>
+            <Link href="/runs/new"><Plus className="h-3.5 w-3.5" /> New </Link>
           </Button>
         </div>
       </div>
@@ -81,7 +80,7 @@ export default function RunsPage() {
                   <TableCell className="py-2 text-sm">{run.name || <span className="text-muted-foreground italic">Unnamed</span>}</TableCell>
                   <TableCell className="py-2"><RunStateBadge state={run.status as RunStatus} /></TableCell>
                   <TableCell className="py-2">
-                    {run.mode && <Badge variant="outline" className="h-4 text-[9px] px-1 font-mono">{run.mode.replace("_"," ")}</Badge>}
+                    {run.mode && <Badge variant="outline" className="h-4 text-[9px] px-1 font-mono">{run.mode.replace("_", " ")}</Badge>}
                   </TableCell>
                   <TableCell className="py-2 font-technical text-xs text-muted-foreground">{formatDuration(elapsed)}</TableCell>
                   <TableCell className="py-2 text-xs text-muted-foreground">{run.started_at ? formatRelativeTime(run.started_at) : "—"}</TableCell>

@@ -22,7 +22,7 @@ import type {
 // Base URL + shared helpers
 // ---------------------------------------------------------------------------
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 /** Builds a URL relative to the API base, appending optional query params. */
 function apiUrl(path: string, params?: Record<string, string | number | boolean | undefined>): string {

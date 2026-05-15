@@ -23,9 +23,7 @@ import {
     flexRender,
     createColumnHelper,
     type SortingState,
-    type ColumnFiltersState,
 } from "@tanstack/react-table";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge, SeverityChip } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

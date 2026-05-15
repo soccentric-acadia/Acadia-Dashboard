@@ -4,11 +4,9 @@ import { motion } from "motion/react";
 import { useBoard } from "@/lib/board/context";
 import { SectionCard } from "@/components/primitives/section-card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useTheme } from "next-themes";
-import { Server, Moon, Sun, Monitor, Palette } from "lucide-react";
+import { Server, Moon, Sun, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { pageVariants } from "@/components/motion/presets";
 

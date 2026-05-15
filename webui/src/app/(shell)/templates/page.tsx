@@ -1,11 +1,10 @@
 "use client";
 import * as React from "react";
-import Link from "next/link";
+
 import { motion } from "motion/react";
 import { SectionCard } from "@/components/primitives/section-card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Plus, FileCode, ChevronRight } from "lucide-react";
+import { Plus, FileCode } from "lucide-react";
 import { pageVariants } from "@/components/motion/presets";
 
 export default function TemplatesPage() {

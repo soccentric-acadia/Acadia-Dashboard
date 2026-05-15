@@ -6,7 +6,7 @@ import { SectionCard } from "@/components/primitives/section-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Upload, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Upload, RotateCcw } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { pageVariants } from "@/components/motion/presets";

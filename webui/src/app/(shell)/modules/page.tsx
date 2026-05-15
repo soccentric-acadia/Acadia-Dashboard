@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { pageVariants, listItemVariants } from "@/components/motion/presets";
 import type { ModuleInfo } from "@/lib/proto/registry";
-import { cn } from "@/lib/utils";
 
 export default function ModulesPage() {
   const [filter, setFilter] = React.useState("");
