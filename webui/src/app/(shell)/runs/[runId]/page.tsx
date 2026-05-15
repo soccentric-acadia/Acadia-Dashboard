@@ -11,7 +11,7 @@ import {
     useRunLogs,
     useRunSSE,
 } from "@/lib/api/queries";
-import { getModuleLabel, formatRelativeTime, formatDuration, formatDurationNs } from "@/lib/utils";
+import { getModuleLabel, formatRelativeTime, formatDuration } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { ResultTable } from "@/components/results/result-table";
-import { GenericResultRenderer } from "@/components/results/renderers/generic";
 import { isFailureStatus, isUserCancelled } from "@/lib/status";
 import { extractNumericSeries } from "@/lib/value/typed";
 import {
@@ -35,12 +34,9 @@ import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { setBaseline, rerunRun, deleteRun } from "@/lib/api/client";
 import { useRouter } from "next/navigation";
-import type { TestResult, RunStatus, Status } from "@/lib/api/types";
+import type { TestResult, RunStatus, Status, LogEntry } from "@/lib/api/types";
 
 const ACTIVE_STATUSES = new Set<RunStatus>(["queued", "running", "paused"]);
-
-// ── Per-module summary derivation ─────────────────────────────────────────────
-
 type ModuleSummaryStatus = "PASS" | "FAIL" | "NEVER" | "ABORTED";
 
 function deriveModuleStatus(results: TestResult[]): ModuleSummaryStatus {
@@ -54,8 +50,6 @@ function deriveModuleStatus(results: TestResult[]): ModuleSummaryStatus {
     return "NEVER";
 }
 
-// ── Main page ────────────────────────────────────────────────────────────────
-
 export default function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
     const { runId } = use(params);
     const { data: run, isLoading, error } = useRun(runId);
@@ -64,10 +58,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     const resumeRun = useResumeRun();
     const qc = useQueryClient();
     const router = useRouter();
-
     const isActive = ACTIVE_STATUSES.has(run?.status as RunStatus);
-
-    // Live SSE updates when run is active
     useRunSSE(runId, isActive);
 
     const baselineMutation = useMutation({
@@ -117,86 +108,75 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
     return (
         <div className="space-y-6">
-            {/* ABORTED banner */}
             {(run.status === "cancelled" || wasAborted) && !isActive && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>
                         {run.status === "cancelled"
-                            ? "This run was cancelled. Results captured up to the cancellation point are shown below."
+                            ? "This run was cancelled. Results captured up to cancellation are shown below."
                             : "One or more tests were aborted. Partial results are shown."}
                     </span>
                 </div>
             )}
 
-            {/* Header */}
             <div className="flex items-center gap-4 flex-wrap">
                 <Button variant="ghost" size="sm" asChild>
                     <Link href="/runs"><ArrowLeft className="mr-2 h-4 w-4" />Runs</Link>
                 </Button>
-                <h1 className="text-xl font-bold font-mono">
-                    {run.name || runId.slice(0, 20) + "\u2026"}
-                </h1>
+                <h1 className="text-xl font-bold font-mono">{run.name || runId.slice(0, 20) + "…"}</h1>
                 <RunStateBadge state={run.status} />
                 {isActive && (
                     <Badge variant="outline" className="animate-pulse text-xs text-green-500 border-green-500">
-                        \u25cf live
+                        ● live
                     </Badge>
                 )}
             </div>
 
-            {/* Controls */}
             {isActive && (
                 <div className="flex gap-2">
                     {run.status === "running" && (
-                        <Button variant="outline" size="sm" onClick={() => pauseRun.mutateAsync(runId).then(() => toast.success("Run paused")).catch((e: Error) => toast.error(e.message))} disabled={pauseRun.isPending}>
+                        <Button variant="outline" size="sm" disabled={pauseRun.isPending}
+                            onClick={() => pauseRun.mutateAsync(runId).then(() => toast.success("Paused")).catch((e: Error) => toast.error(e.message))}>
                             <PauseCircle className="mr-2 h-4 w-4" />Pause
                         </Button>
                     )}
                     {run.status === "paused" && (
-                        <Button variant="outline" size="sm" onClick={() => resumeRun.mutateAsync(runId).then(() => toast.success("Run resumed")).catch((e: Error) => toast.error(e.message))} disabled={resumeRun.isPending}>
+                        <Button variant="outline" size="sm" disabled={resumeRun.isPending}
+                            onClick={() => resumeRun.mutateAsync(runId).then(() => toast.success("Resumed")).catch((e: Error) => toast.error(e.message))}>
                             <PlayCircle className="mr-2 h-4 w-4" />Resume
                         </Button>
                     )}
-                    <Button variant="destructive" size="sm" onClick={() => cancelRun.mutateAsync(runId).then(() => toast.success("Run cancelled")).catch((e: Error) => toast.error(`Cancel failed: ${e.message}`))} disabled={cancelRun.isPending}>
+                    <Button variant="destructive" size="sm" disabled={cancelRun.isPending}
+                        onClick={() => cancelRun.mutateAsync(runId).then(() => toast.success("Cancelled")).catch((e: Error) => toast.error(e.message))}>
                         <Square className="mr-2 h-4 w-4" />Cancel
                     </Button>
                 </div>
             )}
 
-            {/* Finished-run actions */}
-            {!isActive && run && (
+            {!isActive && (
                 <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={() => baselineMutation.mutate()} disabled={baselineMutation.isPending || !!run.baseline_flag}>
-                        <Flag className="mr-2 h-4 w-4" />
-                        {run.baseline_flag ? "Baseline" : "Set as baseline"}
+                    <Button variant="outline" size="sm" disabled={baselineMutation.isPending || !!run.baseline_flag} onClick={() => baselineMutation.mutate()}>
+                        <Flag className="mr-2 h-4 w-4" />{run.baseline_flag ? "Baseline" : "Set as baseline"}
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => rerunMutation.mutate()} disabled={rerunMutation.isPending}>
+                    <Button variant="outline" size="sm" disabled={rerunMutation.isPending} onClick={() => rerunMutation.mutate()}>
                         <RotateCcw className="mr-2 h-4 w-4" />Re-run
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleExport}>
                         <Download className="mr-2 h-4 w-4" />Export CSV
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 ml-auto" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
+                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 ml-auto" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>
                         <Trash2 className="mr-2 h-4 w-4" />Delete
                     </Button>
                 </div>
             )}
 
-            {/* Stat cards */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Mode" value={run.mode} />
                 <StatCard label="Status" value={<RunStateBadge state={run.status} />} />
-                <StatCard label="Started" value={run.started_at ? formatRelativeTime(run.started_at) : "\u2014"} />
-                <StatCard
-                    label="Duration"
-                    value={run.started_at
-                        ? formatDuration((run.ended_at ? new Date(run.ended_at) : new Date()).getTime() - new Date(run.started_at).getTime())
-                        : "\u2014"}
-                />
+                <StatCard label="Started" value={run.started_at ? formatRelativeTime(run.started_at) : "—"} />
+                <StatCard label="Duration" value={run.started_at ? formatDuration((run.ended_at ? new Date(run.ended_at) : new Date()).getTime() - new Date(run.started_at).getTime()) : "—"} />
             </div>
 
-            {/* Main tabs */}
             <Tabs defaultValue="results">
                 <TabsList>
                     <TabsTrigger value="results">Results ({resultsPage?.total ?? 0})</TabsTrigger>
@@ -204,19 +184,15 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                     <TabsTrigger value="logs">Logs</TabsTrigger>
                     <TabsTrigger value="config">Config</TabsTrigger>
                 </TabsList>
-
                 <TabsContent value="results" className="mt-4">
                     <ResultsTab results={allResults} isActive={isActive} />
                 </TabsContent>
-
                 <TabsContent value="summary" className="mt-4">
                     <ModuleSummaryTab results={allResults} runId={runId} />
                 </TabsContent>
-
                 <TabsContent value="logs" className="mt-4">
                     <LogsPanel logs={logs ?? []} />
                 </TabsContent>
-
                 <TabsContent value="config" className="mt-4">
                     <Card>
                         <CardContent className="pt-4">
@@ -231,44 +207,32 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
 function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
     return (
         <Card>
-            <CardHeader className="pb-1">
-                <CardTitle className="text-xs text-muted-foreground">{label}</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="text-sm font-medium capitalize">{value}</div>
-            </CardContent>
+            <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">{label}</CardTitle></CardHeader>
+            <CardContent><div className="text-sm font-medium capitalize">{value}</div></CardContent>
         </Card>
     );
 }
-
-// ── Results tab ───────────────────────────────────────────────────────────────
 
 const CHART_COLORS = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2"];
 
 function ResultsTab({ results, isActive }: { results: TestResult[]; isActive: boolean }) {
     const [chartedKeys, setChartedKeys] = useState<Array<{ source: "metrics" | "monitoring" | "event"; key: string }>>([]);
 
-    const handleChartKey = useCallback((source: "metrics" | "monitoring" | "event", key: string) => {
-        setChartedKeys((prev) => {
-            if (prev.some((e) => e.source === source && e.key === key)) return prev;
-            return [...prev, { source, key }];
-        });
+    const addChartKey = useCallback((source: "metrics" | "monitoring" | "event", key: string) => {
+        setChartedKeys((prev) => prev.some((e) => e.source === source && e.key === key) ? prev : [...prev, { source, key }]);
     }, []);
 
     const chartData = useMemo(() => {
         const bySeq = new Map<number, Record<string, number | undefined> & { sequence: number }>();
         for (const { source, key } of chartedKeys) {
-            const series = extractNumericSeries(results, source, key);
             const seriesKey = source === "metrics" ? key : `${source}:${key}`;
-            for (const pt of series) {
-                const existing = bySeq.get(pt.sequence) ?? { sequence: pt.sequence };
-                existing[seriesKey] = pt.value;
-                bySeq.set(pt.sequence, existing);
+            for (const pt of extractNumericSeries(results, source, key)) {
+                const row = bySeq.get(pt.sequence) ?? { sequence: pt.sequence };
+                row[seriesKey] = pt.value;
+                bySeq.set(pt.sequence, row);
             }
         }
         return Array.from(bySeq.values()).sort((a, b) => a.sequence - b.sequence);
@@ -277,7 +241,7 @@ function ResultsTab({ results, isActive }: { results: TestResult[]; isActive: bo
     if (!results.length) return (
         <Card>
             <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                {isActive ? "Waiting for results\u2026" : "No results recorded."}
+                {isActive ? "Waiting for results…" : "No results recorded."}
             </CardContent>
         </Card>
     );
@@ -288,18 +252,14 @@ function ResultsTab({ results, isActive }: { results: TestResult[]; isActive: bo
                 <Card>
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm flex items-center gap-2">
-                                <BarChart2 className="h-4 w-4" /> Metrics chart
-                            </CardTitle>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setChartedKeys([])}>
-                                <X className="h-3 w-3" />
-                            </Button>
+                            <CardTitle className="text-sm flex items-center gap-2"><BarChart2 className="h-4 w-4" />Metrics chart</CardTitle>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setChartedKeys([])}><X className="h-3 w-3" /></Button>
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                             {chartedKeys.map(({ source, key }) => (
                                 <Badge key={`${source}:${key}`} variant="secondary" className="text-xs gap-1">
                                     {source !== "metrics" && <span className="opacity-60">{source}:</span>}{key}
-                                    <button onClick={() => setChartedKeys((p) => p.filter((e) => !(e.source === source && e.key === key)))}>
+                                    <button onClick={() => setChartedKeys((p) => p.filter((e) => !(e.source === source && e.key === key)))} aria-label={`Remove ${key}`}>
                                         <X className="h-2.5 w-2.5 ml-0.5" />
                                     </button>
                                 </Badge>
@@ -307,39 +267,33 @@ function ResultsTab({ results, isActive }: { results: TestResult[]; isActive: bo
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {chartData.length === 0 ? (
-                            <p className="text-xs text-muted-foreground text-center py-4">No numeric data for the selected keys.</p>
-                        ) : (
-                            <ResponsiveContainer width="100%" height={200}>
-                                <LineChart data={chartData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                                    <XAxis dataKey="sequence" tick={{ fontSize: 10 }} />
-                                    <YAxis tick={{ fontSize: 10 }} />
-                                    <RechartTooltip contentStyle={{ fontSize: 11 }} />
-                                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                                    {chartedKeys.map(({ source, key }, i) => (
-                                        <Line
-                                            key={`${source}:${key}`}
-                                            type="monotone"
-                                            dataKey={source === "metrics" ? key : `${source}:${key}`}
-                                            name={key}
-                                            stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                                            dot={false}
-                                            connectNulls
-                                        />
-                                    ))}
-                                </LineChart>
-                            </ResponsiveContainer>
-                        )}
+                        {chartData.length === 0
+                            ? <p className="text-xs text-muted-foreground text-center py-4">No numeric data for the selected keys.</p>
+                            : (
+                                <ResponsiveContainer width="100%" height={200}>
+                                    <LineChart data={chartData}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="sequence" tick={{ fontSize: 10 }} />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <RechartTooltip contentStyle={{ fontSize: 11 }} />
+                                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                                        {chartedKeys.map(({ source, key }, i) => (
+                                            <Line key={`${source}:${key}`} type="monotone"
+                                                dataKey={source === "metrics" ? key : `${source}:${key}`}
+                                                name={key} stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                                                dot={false} connectNulls />
+                                        ))}
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            )
+                        }
                     </CardContent>
                 </Card>
             )}
-            <ResultTable results={results} onChartKey={handleChartKey} />
+            <ResultTable results={results} onChartKey={addChartKey} />
         </div>
     );
 }
-
-// ── Per-module summary tab ────────────────────────────────────────────────────
 
 function ModuleSummaryTab({ results, runId }: { results: TestResult[]; runId: string }) {
     const byModule = useMemo(() => {
@@ -349,19 +303,17 @@ function ModuleSummaryTab({ results, runId }: { results: TestResult[]; runId: st
             arr.push(r);
             map.set(r.module_id, arr);
         }
-        for (const [, arr] of map) arr.sort((a, b) => a.sequence - b.sequence);
+        Array.from(map.values()).forEach((arr) => arr.sort((a: TestResult, b: TestResult) => a.sequence - b.sequence));
         return map;
     }, [results]);
 
-    if (byModule.size === 0) {
-        return (
-            <Card>
-                <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                    No results yet.
-                </CardContent>
-            </Card>
-        );
-    }
+    if (byModule.size === 0) return (
+        <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No results yet.</CardContent></Card>
+    );
+
+    const badgeVariantMap: Record<ModuleSummaryStatus, "success" | "destructive" | "secondary" | "aborted"> = {
+        PASS: "success", FAIL: "destructive", NEVER: "secondary", ABORTED: "aborted",
+    };
 
     return (
         <div className="rounded-md border">
@@ -381,25 +333,18 @@ function ModuleSummaryTab({ results, runId }: { results: TestResult[]; runId: st
                         const last = moduleResults[moduleResults.length - 1];
                         const passCount = moduleResults.filter((r) => r.status === "PASS").length;
                         const failCount = moduleResults.filter((r) => isFailureStatus(r.status as Status)).length;
-                        const badgeVariantMap: Record<ModuleSummaryStatus, "success" | "destructive" | "secondary" | "aborted"> = {
-                            PASS: "success", FAIL: "destructive", NEVER: "secondary", ABORTED: "aborted",
-                        };
                         return (
                             <tr key={moduleId} className="hover:bg-muted/30">
                                 <td className="px-4 py-3 font-medium">{getModuleLabel(moduleId)}</td>
                                 <td className="px-4 py-3">
-                                    <Badge variant={badgeVariantMap[summaryStatus]} className="uppercase text-xs">
-                                        {summaryStatus}
-                                    </Badge>
+                                    <Badge variant={badgeVariantMap[summaryStatus]} className="uppercase text-xs">{summaryStatus}</Badge>
                                 </td>
                                 <td className="px-4 py-3 text-xs text-muted-foreground">
-                                    <span className="text-green-600 dark:text-green-400">{passCount}\u2713</span>
-                                    {failCount > 0 && <span className="ml-1 text-red-500">{failCount}\u2717</span>}
-                                    <span className="ml-1">{"\u2215"} {moduleResults.length}</span>
+                                    <span className="text-green-600 dark:text-green-400">{passCount}✓</span>
+                                    {failCount > 0 && <span className="ml-1 text-red-500">{failCount}✗</span>}
+                                    <span className="ml-1">/ {moduleResults.length}</span>
                                 </td>
-                                <td className="px-4 py-3 text-xs text-muted-foreground">
-                                    {last ? formatRelativeTime(last.timestamp) : "\u2014"}
-                                </td>
+                                <td className="px-4 py-3 text-xs text-muted-foreground">{last ? formatRelativeTime(last.timestamp) : "—"}</td>
                                 <td className="px-4 py-3">
                                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
                                         <Link href={`/modules/${moduleId}`}>Module</Link>
@@ -414,22 +359,14 @@ function ModuleSummaryTab({ results, runId }: { results: TestResult[]; runId: st
     );
 }
 
-// ── Logs panel ────────────────────────────────────────────────────────────────
-
-function LogsPanel({ logs }: { logs: import("@/lib/api/types").LogEntry[] }) {
+function LogsPanel({ logs }: { logs: LogEntry[] }) {
     const SEVERITY_COLORS: Record<string, string> = {
         ERROR: "text-red-400", WARN: "text-yellow-400", WARNING: "text-yellow-400",
         INFO: "text-blue-400", DEBUG: "text-muted-foreground",
     };
-
     if (!logs.length) return (
-        <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No log entries.
-            </CardContent>
-        </Card>
+        <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No log entries.</CardContent></Card>
     );
-
     return (
         <Card>
             <CardContent className="p-0">

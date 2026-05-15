@@ -2,24 +2,34 @@
 
 import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useRun } from "@/lib/api/queries";
+import { useRun, useRunCompare } from "@/lib/api/queries";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
-import { AlertCircle, GitCompare } from "lucide-react";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { AlertCircle, GitCompare, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { CompareRow, CompareCategory, Status } from "@/lib/api/types";
 
-function DiffValue({ a, b }: { a: unknown; b: unknown }) {
-    const changed = JSON.stringify(a) !== JSON.stringify(b);
-    return (
-        <div className={cn("grid grid-cols-2 gap-2 text-sm", changed && "bg-yellow-500/5 rounded px-1")}>
-            <span className={cn(changed && "text-red-500")}>{a == null ? "—" : String(a)}</span>
-            <span className={cn(changed && "text-green-500")}>{b == null ? "—" : String(b)}</span>
-        </div>
-    );
-}
+const CATEGORY_LABEL: Record<CompareCategory, string> = {
+    unchanged: "Unchanged",
+    improved: "Improved",
+    regressed: "Regressed",
+    drifted: "Drifted",
+    disappeared: "Disappeared",
+    appeared: "Appeared",
+};
+
+const CATEGORY_VARIANT: Record<CompareCategory, React.ComponentProps<typeof Badge>["variant"]> = {
+    unchanged: "secondary",
+    improved: "success",
+    regressed: "destructive",
+    drifted: "timeout",
+    disappeared: "aborted",
+    appeared: "outline",
+};
 
 function CompareContent() {
     const params = useSearchParams();
@@ -29,95 +39,146 @@ function CompareContent() {
 
     const { data: runA, isLoading: loadingA, isError: errorA } = useRun(runAId);
     const { data: runB, isLoading: loadingB, isError: errorB } = useRun(runBId);
+    const { data: comparison, isLoading: loadingCmp, isError: errorCmp } = useRunCompare(
+        runAId && runBId ? runAId : "",
+        runAId && runBId ? runBId : ""
+    );
 
-    if (!runAId || !runBId) {
-        return (
-            <div className="space-y-4">
-                <h1 className="text-2xl font-bold tracking-tight">Compare Runs</h1>
-                <div className="rounded-lg border border-dashed p-12 text-center">
-                    <GitCompare className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
-                    <p className="font-medium">Select two runs to compare</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Open this page with <code className="bg-muted px-1 rounded">?a=run_id_1&b=run_id_2</code> to compare two runs.
-                    </p>
-                    <Button className="mt-4" onClick={() => router.push("/runs")}>
-                        Browse runs
-                    </Button>
-                </div>
-            </div>
-        );
-    }
+    if (!runAId || !runBId) return (
+        <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                Select two runs to compare via <code>?a=runA&b=runB</code>.
+            </CardContent>
+        </Card>
+    );
 
-    if (loadingA || loadingB) return <Skeleton className="h-80 w-full" />;
+    if (loadingA || loadingB || loadingCmp) return (
+        <div className="space-y-4">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-64 w-full" />
+        </div>
+    );
 
-    if (errorA || errorB || !runA || !runB) {
-        return (
-            <div className="flex items-center gap-2 text-destructive">
-                <AlertCircle className="h-4 w-4" />
-                Failed to load one or both runs.
-            </div>
-        );
-    }
+    if (errorA || errorB) return (
+        <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-destructive">
+            <AlertCircle className="h-4 w-4" />
+            <span>Could not load one or both runs.</span>
+        </div>
+    );
 
-    const fields: Array<{ label: string; a: unknown; b: unknown }> = [
-        { label: "Name",        a: runA.name,   b: runB.name },
-        { label: "Mode",        a: runA.mode,   b: runB.mode },
-        { label: "Status",      a: runA.status, b: runB.status },
-        { label: "Baseline",    a: runA.baseline_flag ? "Yes" : "No", b: runB.baseline_flag ? "Yes" : "No" },
-        { label: "Created by",  a: runA.created_by, b: runB.created_by },
-        { label: "Started",     a: runA.started_at ? new Date(runA.started_at).toLocaleString() : "—", b: runB.started_at ? new Date(runB.started_at).toLocaleString() : "—" },
-        { label: "Ended",       a: runA.ended_at ? new Date(runA.ended_at).toLocaleString() : "—", b: runB.ended_at ? new Date(runB.ended_at).toLocaleString() : "—" },
-        { label: "Error",       a: runA.error_message ?? "—", b: runB.error_message ?? "—" },
-    ];
+    if (errorCmp || !comparison) return (
+        <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-destructive">
+            <AlertCircle className="h-4 w-4" />
+            <span>Compare failed. The server may not yet support this endpoint.</span>
+        </div>
+    );
+
+    const rows = comparison.rows ?? [];
+    // Group by category for summary
+    const categoryCount = rows.reduce<Record<string, number>>((acc, r) => {
+        acc[r.category] = (acc[r.category] ?? 0) + 1;
+        return acc;
+    }, {});
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-3">
-                <GitCompare className="h-6 w-6" />
-                <h1 className="text-2xl font-bold tracking-tight">Run comparison</h1>
+            <div className="flex items-center gap-3 flex-wrap">
+                <GitCompare className="h-5 w-5 text-muted-foreground" />
+                <h1 className="text-xl font-bold">Compare runs</h1>
             </div>
 
-            {/* Header */}
+            {/* Run pair header */}
             <div className="grid grid-cols-2 gap-4">
-                {[runA, runB].map((run, i) => (
-                    <Card key={i}>
-                        <CardContent className="pt-4 pb-4">
-                            <p className="text-xs text-muted-foreground mb-1">{i === 0 ? "Run A (baseline)" : "Run B (comparison)"}</p>
-                            <p className="font-mono text-sm font-medium">{run.id.slice(0, 12)}…</p>
-                            <div className="flex items-center gap-2 mt-1">
-                                <RunStateBadge state={run.status} />
-                                <Badge variant="outline" className="text-xs capitalize">{run.mode}</Badge>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
+                <Card>
+                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Run A</CardTitle></CardHeader>
+                    <CardContent className="flex items-center gap-2">
+                        <span className="font-mono text-sm">{runA?.name ?? runAId.slice(0, 12)}</span>
+                        {runA && <RunStateBadge state={runA.status} />}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Run B</CardTitle></CardHeader>
+                    <CardContent className="flex items-center gap-2">
+                        <span className="font-mono text-sm">{runB?.name ?? runBId.slice(0, 12)}</span>
+                        {runB && <RunStateBadge state={runB.status} />}
+                    </CardContent>
+                </Card>
             </div>
 
-            {/* Diff table */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">Field comparison</CardTitle>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mt-1">
-                        <span>Run A ({runA.id.slice(0, 8)}…)</span>
-                        <span>Run B ({runB.id.slice(0, 8)}…)</span>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-0 divide-y">
-                    {fields.map(({ label, a, b }) => (
-                        <div key={label} className="py-2.5">
-                            <p className="text-xs text-muted-foreground mb-1">{label}</p>
-                            <DiffValue a={a} b={b} />
-                        </div>
-                    ))}
-                </CardContent>
-            </Card>
+            {/* Category summary chips */}
+            <div className="flex flex-wrap gap-2">
+                {(Object.keys(CATEGORY_LABEL) as CompareCategory[]).map((cat) => (
+                    categoryCount[cat] ? (
+                        <Badge key={cat} variant={CATEGORY_VARIANT[cat]} className="gap-1">
+                            {CATEGORY_LABEL[cat]}
+                            <span className="font-bold">{categoryCount[cat]}</span>
+                        </Badge>
+                    ) : null
+                ))}
+                {rows.length === 0 && <span className="text-sm text-muted-foreground">No differences.</span>}
+            </div>
+
+            {/* Full diff table */}
+            {rows.length > 0 && (
+                <div className="rounded-md border overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead className="border-b bg-muted/50">
+                            <tr>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Module</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Test</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Status A</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground"></th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Status B</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Category</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Metric drift</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                            {rows.map((row, i) => (
+                                <CompareRowItem key={i} row={row} />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
+    );
+}
+
+function CompareRowItem({ row }: { row: CompareRow }) {
+    const isChanged = row.category !== "unchanged";
+    const driftKeys = row.metrics_drift ? Object.keys(row.metrics_drift) : [];
+
+    return (
+        <tr className={cn("hover:bg-muted/30", isChanged && "bg-muted/10")}>
+            <td className="px-4 py-2 text-xs font-mono text-muted-foreground">{row.module_id}</td>
+            <td className="px-4 py-2 max-w-[200px]">
+                <div className="truncate font-medium">{row.name || row.test_id}</div>
+                {row.name && <div className="text-xs text-muted-foreground font-mono truncate">{row.test_id}</div>}
+            </td>
+            <td className="px-4 py-2">
+                {row.status_a ? <StatusBadge status={row.status_a as Status} severity={row.severity_a as import("@/lib/api/types").Severity | undefined} /> : <span className="text-muted-foreground text-xs">—</span>}
+            </td>
+            <td className="px-2 py-2 text-muted-foreground"><ArrowRight className="h-3 w-3" /></td>
+            <td className="px-4 py-2">
+                {row.status_b ? <StatusBadge status={row.status_b as Status} severity={row.severity_b as import("@/lib/api/types").Severity | undefined} /> : <span className="text-muted-foreground text-xs">—</span>}
+            </td>
+            <td className="px-4 py-2">
+                <Badge variant={CATEGORY_VARIANT[row.category]} className="text-xs">{CATEGORY_LABEL[row.category]}</Badge>
+            </td>
+            <td className="px-4 py-2 text-xs text-muted-foreground">
+                {driftKeys.length > 0
+                    ? driftKeys.map((k) => <div key={k}>{k}: {String(row.metrics_drift![k])}</div>)
+                    : "—"}
+            </td>
+        </tr>
     );
 }
 
 export default function ComparePage() {
     return (
-        <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
             <CompareContent />
         </Suspense>
     );

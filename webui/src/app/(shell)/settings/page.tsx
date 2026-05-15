@@ -237,32 +237,32 @@ function AlertsTab() {
                     <div className="grid grid-cols-2 gap-2">
                         <div>
                             <label className="text-xs text-muted-foreground">Module ID</label>
-                            <Input value={form.module_id} onChange={e => setForm(f => ({...f, module_id: e.target.value}))} placeholder="e.g. cpu" />
+                            <Input value={form.module_id} onChange={e => setForm(f => ({ ...f, module_id: e.target.value }))} placeholder="e.g. cpu" />
                         </div>
                         <div>
                             <label className="text-xs text-muted-foreground">Field path</label>
-                            <Input value={form.field_path} onChange={e => setForm(f => ({...f, field_path: e.target.value}))} placeholder="e.g. temperature" />
+                            <Input value={form.field_path} onChange={e => setForm(f => ({ ...f, field_path: e.target.value }))} placeholder="e.g. temperature" />
                         </div>
                         <div>
                             <label className="text-xs text-muted-foreground">Operator</label>
                             <select
                                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                                 value={form.operator}
-                                onChange={e => setForm(f => ({...f, operator: e.target.value}))}
+                                onChange={e => setForm(f => ({ ...f, operator: e.target.value }))}
                             >
                                 {[">", "<", ">=", "<=", "=="].map(op => <option key={op}>{op}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="text-xs text-muted-foreground">Threshold</label>
-                            <Input type="number" value={form.threshold} onChange={e => setForm(f => ({...f, threshold: parseFloat(e.target.value) || 0}))} />
+                            <Input type="number" value={form.threshold} onChange={e => setForm(f => ({ ...f, threshold: parseFloat(e.target.value) || 0 }))} />
                         </div>
                         <div>
                             <label className="text-xs text-muted-foreground">Severity</label>
                             <select
                                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                                 value={form.severity}
-                                onChange={e => setForm(f => ({...f, severity: e.target.value}))}
+                                onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}
                             >
                                 <option value="info">Info</option>
                                 <option value="warning">Warning</option>
@@ -357,7 +357,7 @@ function SettingsContent() {
                         <TabsContent value="account"><Card><CardContent className="pt-6"><AccountTab /></CardContent></Card></TabsContent>
                         <TabsContent value="network"><Card><CardContent className="pt-6"><NetworkTab /></CardContent></Card></TabsContent>
                         <TabsContent value="notifications"><Card><CardContent className="pt-6"><StubTab label="Notification preferences" /></CardContent></Card></TabsContent>
-                        <TabsContent value="data"><Card><CardContent className="pt-6"><DataTab /></CardContent></Card></TabsContent>
+                        <TabsContent value="data"><Card><CardContent className="pt-6"><StubTab label="Data management" /></CardContent></Card></TabsContent>
                         <TabsContent value="display"><Card><CardContent className="pt-6"><StubTab label="Display preferences" /></CardContent></Card></TabsContent>
                         <TabsContent value="alerts"><Card><CardContent className="pt-6"><AlertsTab /></CardContent></Card></TabsContent>
                         <TabsContent value="advanced"><Card><CardContent className="pt-6"><StubTab label="Advanced settings and audit log" /></CardContent></Card></TabsContent>

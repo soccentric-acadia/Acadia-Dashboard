@@ -57,7 +57,7 @@ export default function LogsPage() {
     });
 
     const addBookmarkMutation = useMutation({
-        mutationFn: (logId: string) => createLogBookmark({ log_id: logId, note: "" }),
+        mutationFn: (logId: string) => createLogBookmark(logId, ""),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ["log-bookmarks"] }); toast.success("Bookmarked"); },
         onError: (e: Error) => toast.error(e.message),
     });
@@ -66,7 +66,7 @@ export default function LogsPage() {
         if (!searchQuery.trim()) return;
         setSearching(true);
         try {
-            const results = await searchLogs({ q: searchQuery, limit: 200 });
+            const results = await searchLogs(searchQuery, { limit: 200 });
             setSearchResults(results);
         } catch (e) {
             toast.error((e as Error).message);
@@ -194,7 +194,7 @@ function LogTerminal({ logs, onBookmark, emptyMessage }: {
                                 <span className="text-muted-foreground/50 shrink-0 tabular-nums">
                                     {log.timestamp ? new Date(log.timestamp).toISOString().slice(11, 23) : "—"}
                                 </span>
-                                <Badge variant="outline" className={\`shrink-0 text-[10px] px-1 py-0 \${LEVEL_COLORS[log.severity] ?? "text-muted-foreground"}\`}>
+                                <Badge variant="outline" className={`shrink-0 text-[10px] px-1 py-0 ${LEVEL_COLORS[log.severity] ?? "text-muted-foreground"}`}>
                                     {(log.severity ?? "info").toUpperCase().slice(0, 4)}
                                 </Badge>
                                 <span className="text-muted-foreground/70 shrink-0">{log.source}</span>
@@ -206,10 +206,10 @@ function LogTerminal({ logs, onBookmark, emptyMessage }: {
                                     <Bookmark className="h-3.5 w-3.5" />
                                 </button>
                             </div>
-                ))
+                        ))
                     )}
-            </div>
-        </CardContent>
+                </div>
+            </CardContent>
         </Card >
     );
 }
