@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowLeft, GitCompare, ArrowRight, Check, X } from "lucide-react";
 import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
-import type { RunStatus, Status } from "@/lib/api/types";
+import type { RunStatus, Status, CompareRow } from "@/lib/api/types";
 import { isFailureStatus } from "@/lib/status";
 import { pageVariants } from "@/components/motion/presets";
 
@@ -61,7 +61,7 @@ function RunSummaryCard({ runId, side }: { runId: string; side: "A" | "B" }) {
   );
 
   const elapsed = run.started_at
-    ? ((run.finished_at ? new Date(run.finished_at) : new Date()).getTime() - new Date(run.started_at).getTime())
+    ? ((run.ended_at ? new Date(run.ended_at) : new Date()).getTime() - new Date(run.started_at).getTime())
     : 0;
 
   return (
@@ -73,7 +73,7 @@ function RunSummaryCard({ runId, side }: { runId: string; side: "A" | "B" }) {
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Badge variant="outline" className="h-5 text-[9px] px-1.5 font-semibold">{side}</Badge>
-          <RunStateBadge status={run.status as RunStatus} />
+          <RunStateBadge state={run.status as RunStatus} />
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2 text-center">
@@ -116,7 +116,7 @@ function DiffTable({ runIdA, runIdB }: { runIdA: string; runIdB: string }) {
     </div>
   );
 
-  const rows = compareData.results ?? [];
+  const rows = compareData.rows ?? [];
 
   if (rows.length === 0) {
     return (
@@ -138,8 +138,8 @@ function DiffTable({ runIdA, runIdB }: { runIdA: string; runIdB: string }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row: { test_id: string; status_a: string; status_b: string; changed: boolean }, i: number) => {
-            const changed = row.status_a !== row.status_b;
+          {rows.map((row, i: number) => {
+            const changed = row.status_a !== row.status_b || row.category === "regressed" || row.category === "improved";
             return (
               <tr key={i} className={cn("border-b border-border/20 hover:bg-accent/10 transition-colors", changed && "bg-amber-500/5")}>
                 <td className="py-1.5 pl-3 font-mono">{row.test_id}</td>
@@ -152,8 +152,8 @@ function DiffTable({ runIdA, runIdB }: { runIdA: string; runIdB: string }) {
                 <td className="py-1.5 pr-3 text-center">
                   {changed
                     ? <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium text-[10px]">
-                        <ArrowRight className="h-2.5 w-2.5" /> Changed
-                      </span>
+                      <ArrowRight className="h-2.5 w-2.5" /> Changed
+                    </span>
                     : <span className="text-muted-foreground/40">—</span>
                   }
                 </td>

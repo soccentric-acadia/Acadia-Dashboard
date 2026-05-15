@@ -7,9 +7,10 @@ import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { getModuleRegistry } from "@/lib/proto/registry";
 import { getModuleLabel, formatRelativeTime, formatDurationNs, cn } from "@/lib/utils";
-import { useModuleResults, useModuleTrend } from "@/lib/api/queries";
+import { useModuleResults } from "@/lib/api/queries";
 import { ModuleIcon } from "@/components/primitives/module-icon";
 import { LiveDot } from "@/components/primitives/live-dot";
+import type { LiveDotState } from "@/components/primitives/live-dot";
 import { Sparkline } from "@/components/primitives/sparkline";
 import { SectionCard } from "@/components/primitives/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -19,20 +20,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import {
-  ArrowLeft, AlertCircle, TrendingUp, Clock, CheckCircle2, XCircle,
-} from "lucide-react";
+import { ArrowLeft, AlertCircle, TrendingUp } from "lucide-react";
 import { isFailureStatus } from "@/lib/status";
-import { numericKeys } from "@/lib/value/typed";
+import { numericKeys, extractNumericSeries } from "@/lib/value/typed";
 import type { Status, TestResult } from "@/lib/api/types";
 import { pageVariants } from "@/components/motion/presets";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function lastDotState(results: TestResult[]): import("@/components/primitives/live-dot").LiveDotState {
+function lastDotState(results: TestResult[]): LiveDotState {
   const last = results.at(-1);
   if (!last) return "never";
   const s = last.status as Status;
@@ -57,10 +56,8 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
   });
 
   const { data: resultsPage, isLoading: resultsLoading } = useModuleResults(moduleId, { limit: 200 });
-  const { data: trendPage } = useModuleTrend(moduleId, 30);
 
   const results = resultsPage?.results ?? [];
-  const trendData = trendPage?.results ?? [];
 
   const mod = modules?.find((m) => m.id === moduleId);
   const label = getModuleLabel(moduleId);
@@ -74,18 +71,19 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
   // Sparkline data (pass=1, fail=0) from recent results
   const trendSeries = results.slice(-30).map((r) => (r.status === "PASS" ? 1 : 0));
 
-  // Recharts trend series for the chart tab
-  const chartData = trendData.map((r, i) => ({
+  // Recharts chart data from results
+  const chartData = results.slice(-50).map((r, i) => ({
     index: i + 1,
     status: r.status === "PASS" ? 1 : 0,
     duration: r.duration_ns ? r.duration_ns / 1_000_000 : null,
   }));
 
-  // Numeric measurement keys for mini charts
-  const numericFields = results.length > 0 ? numericKeys(results[0].values ?? {}) : [];
+  // Numeric measurement keys from metrics field
+  const numericMetricKeys = results.length > 0
+    ? numericKeys(results, "metrics")
+    : [];
 
   const isLoading = modulesLoading || resultsLoading;
-
   const dotState = lastDotState(results);
 
   if (isLoading) {
@@ -158,7 +156,7 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
         <TabsList className="h-8">
           <TabsTrigger value="results" className="text-xs h-7">Results</TabsTrigger>
           <TabsTrigger value="trend" className="text-xs h-7">Trend</TabsTrigger>
-          {numericFields.length > 0 && (
+          {numericMetricKeys.length > 0 && (
             <TabsTrigger value="measurements" className="text-xs h-7">Measurements</TabsTrigger>
           )}
         </TabsList>
@@ -179,7 +177,7 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
 
         {/* Trend chart */}
         <TabsContent value="trend" className="mt-4">
-          <SectionCard title="Pass/Fail Trend (last 30 runs)">
+          <SectionCard title="Pass/Fail Trend (last 50 runs)">
             {chartData.length < 2 ? (
               <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
                 <TrendingUp className="h-8 w-8 opacity-40" />
@@ -189,12 +187,8 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
-                  <XAxis dataKey="index" tick={{ fontSize: 10 }} className="fill-muted-foreground" />
-                  <YAxis domain={[0, 1]} tickFormatter={(v) => v === 1 ? "P" : "F"} tick={{ fontSize: 10 }} className="fill-muted-foreground" />
-                  <Tooltip
-                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 11 }}
-                    formatter={(v: number) => v === 1 ? ["PASS", "Status"] : ["FAIL", "Status"]}
-                  />
+                  <XAxis dataKey="index" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 1]} tickFormatter={(v: number) => v === 1 ? "P" : "F"} tick={{ fontSize: 10 }} />
                   <ReferenceLine y={0.5} stroke="hsl(var(--border))" strokeDasharray="4 2" />
                   <Line
                     type="step"
@@ -211,17 +205,13 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
         </TabsContent>
 
         {/* Measurements */}
-        {numericFields.length > 0 && (
+        {numericMetricKeys.length > 0 && (
           <TabsContent value="measurements" className="mt-4">
             <SectionCard title="Numeric Measurements">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {numericFields.slice(0, 9).map((key) => {
-                  const vals = results
-                    .map((r) => {
-                      const v = r.values?.[key];
-                      return typeof v === "number" ? v : typeof v === "string" ? parseFloat(v) : NaN;
-                    })
-                    .filter((v) => !isNaN(v));
+                {numericMetricKeys.slice(0, 9).map((key) => {
+                  const series = extractNumericSeries(results, "metrics", key);
+                  const vals = series.map((p) => p.value);
                   return (
                     <div key={key} className="instrument-tile rounded-lg p-3 space-y-1">
                       <div className="text-[10px] font-mono text-muted-foreground truncate">{key}</div>

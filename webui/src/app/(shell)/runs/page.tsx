@@ -71,7 +71,7 @@ export default function RunsPage() {
             )}
             {runs.map((run) => {
               const elapsed = run.started_at
-                ? ((run.finished_at ? new Date(run.finished_at) : new Date()).getTime() - new Date(run.started_at).getTime())
+                ? ((run.ended_at ? new Date(run.ended_at) : new Date()).getTime() - new Date(run.started_at).getTime())
                 : 0;
               return (
                 <TableRow key={run.id} className="group border-b border-border/30 hover:bg-accent/10 transition-colors">
@@ -79,7 +79,7 @@ export default function RunsPage() {
                     <Link href={`/runs/${run.id}`} className="hover:underline">{run.id.slice(0, 12)}</Link>
                   </TableCell>
                   <TableCell className="py-2 text-sm">{run.name || <span className="text-muted-foreground italic">Unnamed</span>}</TableCell>
-                  <TableCell className="py-2"><RunStateBadge status={run.status as RunStatus} /></TableCell>
+                  <TableCell className="py-2"><RunStateBadge state={run.status as RunStatus} /></TableCell>
                   <TableCell className="py-2">
                     {run.mode && <Badge variant="outline" className="h-4 text-[9px] px-1 font-mono">{run.mode.replace("_"," ")}</Badge>}
                   </TableCell>

@@ -36,7 +36,7 @@ function isActiveStatus(s: RunStatus): boolean {
 
 function elapsedMs(run: Run): number {
   if (!run.started_at) return 0;
-  const end = run.finished_at ? new Date(run.finished_at).getTime() : Date.now();
+  const end = run.ended_at ? new Date(run.ended_at).getTime() : Date.now();
   return end - new Date(run.started_at).getTime();
 }
 
@@ -133,7 +133,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-lg font-bold truncate">{run.name || run.id.slice(0, 20)}</h1>
-            <RunStateBadge status={run.status as RunStatus} />
+            <RunStateBadge state={run.status as RunStatus} />
             {isActive && <LiveDot state="running" size="sm" />}
           </div>
           <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">

@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { useBoard } from "@/lib/board/context";
-import { useRuns, useHealth, useModules } from "@/lib/api/queries";
+import { useRuns, useHealth } from "@/lib/api/queries";
 import { useQuery } from "@tanstack/react-query";
 import { getModuleRegistry } from "@/lib/proto/registry";
 import { KpiCard } from "@/components/primitives/kpi-card";
@@ -29,7 +29,7 @@ import type { Run } from "@/lib/api/types";
 
 function runElapsedMs(run: Run): number {
   if (!run.started_at) return 0;
-  const end = run.finished_at ? new Date(run.finished_at).getTime() : Date.now();
+  const end = run.ended_at ? new Date(run.ended_at).getTime() : Date.now();
   return end - new Date(run.started_at).getTime();
 }
 
@@ -54,7 +54,7 @@ function RunRow({ run }: { run: Run }) {
         <span className="text-sm truncate max-w-[200px] block">{run.name || "—"}</span>
       </TableCell>
       <TableCell className="py-2">
-        <RunStateBadge status={run.status} />
+        <RunStateBadge state={run.status} />
       </TableCell>
       <TableCell className="py-2 font-technical text-xs text-muted-foreground">
         {formatDuration(runElapsedMs(run))}
@@ -162,7 +162,7 @@ export default function DashboardPage() {
           title="Board"
           value={board?.hostname ?? board?.name ?? "—"}
           icon={<Server className="h-4 w-4" />}
-          action={board ? { label: "Settings", href: "/settings" } : undefined}
+          action={board ? <a href="/settings" className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">Settings</a> : undefined}
           compact
         />
         <KpiCard
@@ -170,7 +170,7 @@ export default function DashboardPage() {
           value={activeRuns.length === 0 ? "None" : String(activeRuns.length)}
           numericValue={activeRuns.length}
           icon={<Activity className="h-4 w-4" />}
-          action={{ label: "New run", href: "/runs/new" }}
+          action={<a href="/runs/new" className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">New run</a>}
           compact
         />
         <KpiCard
@@ -186,7 +186,7 @@ export default function DashboardPage() {
           value={String(totalFailed)}
           numericValue={totalFailed}
           icon={<XCircle className="h-4 w-4" />}
-          action={totalFailed > 0 ? { label: "View", href: "/runs?status=failed" } : undefined}
+          action={totalFailed > 0 ? <a href="/runs?status=failed" className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">View</a> : undefined}
           compact
         />
         <KpiCard
