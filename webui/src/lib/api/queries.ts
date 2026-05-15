@@ -69,7 +69,7 @@ import { getSSEClient } from "./ws";
 import type {
     Run,
     RunStatus,
-    
+
     CreateRunInput,
     CreateConfigInput,
 } from "./types";
@@ -175,7 +175,7 @@ export function useRunLogs(runId: string | null | undefined, filter: LogFilter =
 
 export function useGlobalLogs(filter: LogFilter & { run_id?: string } = {}) {
     return useQuery({
-        queryKey: keys.logs(filter),
+        queryKey: keys.logs(filter as Record<string, unknown>),
         queryFn: () => fetchGlobalLogs(filter),
         staleTime: 5_000,
     });

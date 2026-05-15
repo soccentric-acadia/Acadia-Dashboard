@@ -6,7 +6,7 @@ import { SectionCard } from "@/components/primitives/section-card";
 import { Button } from "@/components/ui/button";
 import { Plus, Target } from "lucide-react";
 import { pageVariants } from "@/components/motion/presets";
-import { cn } from "@/lib/utils";
+
 
 export default function TargetsPage() {
   return (

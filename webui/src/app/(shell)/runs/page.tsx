@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import { useRuns } from "@/lib/api/queries";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
@@ -11,13 +11,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, GitCompare, ChevronRight } from "lucide-react";
-import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
+import { formatRelativeTime, formatDuration } from "@/lib/utils";
 import type { RunStatus } from "@/lib/api/types";
 import { pageVariants } from "@/components/motion/presets";
 
 export default function RunsPage() {
+  return (
+    <React.Suspense>
+      <RunsPageContent />
+    </React.Suspense>
+  );
+}
+
+function RunsPageContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const [status, setStatus] = React.useState(searchParams.get("status") ?? "");
   const { data, isLoading } = useRuns({ status: status || undefined, limit: 50 });
   const runs = data?.runs ?? [];

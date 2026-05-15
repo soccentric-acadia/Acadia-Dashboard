@@ -42,7 +42,8 @@ export function isNoOp(s: Status): boolean {
  * Kept for forwards-compatibility: if the server ever emits an in-flight
  * status (e.g. "RUNNING") this predicate can be updated.
  */
-export function isTerminal(_s: Status): boolean {
+export function isTerminal(s: Status): boolean {
+    void s;
     return true;
 }
 

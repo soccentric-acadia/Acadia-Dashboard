@@ -58,8 +58,8 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
 
   const results = resultsPage?.results ?? [];
 
-  const mod = modules?.find((m) => m.id === moduleId);
   const label = getModuleLabel(moduleId);
+  void modules;
 
   // KPIs
   const totalRuns = results.length;

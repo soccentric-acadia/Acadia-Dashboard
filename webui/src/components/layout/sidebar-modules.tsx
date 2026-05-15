@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getModuleRegistry, getCategoryForModule } from "@/lib/proto/registry";
 import type { ModuleInfo } from "@/lib/proto/registry";
 import { useRuns, useCancelRun } from "@/lib/api/queries";
-import { getModuleLabel, formatRelativeTime } from "@/lib/utils";
+import { getModuleLabel } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ModuleIcon } from "@/components/primitives/module-icon";
 import { LiveDot, type LiveDotState } from "@/components/primitives/live-dot";
@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Search, Square } from "lucide-react";
-import type { Status } from "@/lib/api/types";
+
 import { toast } from "sonner";
 
 type ModuleStatus = LiveDotState;
@@ -39,17 +39,6 @@ const CATEGORY_ORDER = [
   "Sensors", "Display", "Camera", "Audio", "Power",
   "Timing", "Safety", "Debug", "Other",
 ];
-
-function dotStateFromStatus(s: string | undefined | null): ModuleStatus {
-  if (!s) return "never";
-  if (s === "PASS") return "pass";
-  if (s === "FAIL") return "fail";
-  if (s === "ERROR") return "error";
-  if (s === "TIMEOUT") return "timeout";
-  if (s === "SKIPPED") return "skipped";
-  if (s === "ABORTED") return "aborted";
-  return "idle";
-}
 
 interface ModuleRowProps {
   mod: ModuleInfo;

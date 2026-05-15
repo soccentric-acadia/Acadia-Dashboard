@@ -493,6 +493,7 @@ export interface CreateAlertInput {
     operator: string;
     threshold: number;
     severity: string;
+    enabled?: boolean;
 }
 
 export async function fetchAlertRules(): Promise<AlertRule[]> {

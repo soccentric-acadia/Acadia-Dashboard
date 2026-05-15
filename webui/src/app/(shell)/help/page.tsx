@@ -40,7 +40,7 @@ export default function HelpPage() {
         </div>
       </SectionCard>
       <div className="space-y-3">
-        {SECTIONS.map(({ icon: Icon, title, content }) => (
+        {SECTIONS.map(({ title, content }) => (
           <SectionCard key={title} title={title}>
             <p className="text-sm text-muted-foreground leading-relaxed">{content}</p>
           </SectionCard>

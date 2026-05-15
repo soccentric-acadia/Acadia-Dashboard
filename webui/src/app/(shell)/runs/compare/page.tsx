@@ -16,7 +16,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowLeft, GitCompare, ArrowRight } from "lucide-react";
 import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
 import type { RunStatus, Status } from "@/lib/api/types";
-import { isFailureStatus } from "@/lib/status";
 import { pageVariants } from "@/components/motion/presets";
 
 // ─── RunSelector ──────────────────────────────────────────────────────────────
@@ -43,7 +42,6 @@ function RunSummaryCard({ runId, side }: { runId: string; side: "A" | "B" }) {
   const results = resultsPage?.results ?? [];
 
   const passed = results.filter((r) => r.status === "PASS").length;
-  const failed = results.filter((r) => isFailureStatus(r.status as Status)).length;
   const total = results.length;
   const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
 
@@ -169,6 +167,14 @@ function DiffTable({ runIdA, runIdB }: { runIdA: string; runIdB: string }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CompareRunsPage() {
+  return (
+    <React.Suspense>
+      <CompareRunsPageContent />
+    </React.Suspense>
+  );
+}
+
+function CompareRunsPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 

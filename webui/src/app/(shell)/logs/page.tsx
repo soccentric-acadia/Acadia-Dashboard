@@ -33,6 +33,14 @@ const LEVEL_COLORS: Record<string, string> = {
 };
 
 export default function LogsPage() {
+  return (
+    <React.Suspense>
+      <LogsPageContent />
+    </React.Suspense>
+  );
+}
+
+function LogsPageContent() {
   const searchParams = useSearchParams();
   const runId = searchParams.get("run") ?? "";
   const [filter, setFilter] = React.useState("");

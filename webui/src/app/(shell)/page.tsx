@@ -21,7 +21,7 @@ import {
   Server, Activity, CheckCircle2, XCircle, Gauge, Zap,
   ChevronRight, Plus, BarChart3,
 } from "lucide-react";
-import { formatRelativeTime, formatDuration, cn } from "@/lib/utils";
+import { formatRelativeTime, formatDuration } from "@/lib/utils";
 import type { Run } from "@/lib/api/types";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
