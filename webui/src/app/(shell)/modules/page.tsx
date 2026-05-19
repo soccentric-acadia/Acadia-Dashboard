@@ -79,28 +79,3 @@ export default function ModulesPage() {
     </motion.div>
   );
 }
-initial = "hidden"
-animate = "visible"
-variants = {{ visible: { transition: { staggerChildren: 0.03 } } }}
-              >
-{
-  mods.map((m) => (
-    <motion.div key={m.id} variants={listItemVariants}>
-      <Link href={`/modules/${m.id}`}>
-        <div className="instrument-tile rounded-lg p-3 flex flex-col items-center gap-2 text-center cursor-pointer hover:border-primary/40 transition-colors group">
-          <ModuleIcon moduleId={m.id} size="md" className="text-muted-foreground group-hover:text-foreground transition-colors" />
-          <span className="font-mono text-[10px] leading-tight">{getModuleLabel(m.id)}</span>
-          <LiveDot state="never" size="xs" />
-        </div>
-      </Link>
-    </motion.div>
-  ))
-}
-              </motion.div >
-            </div >
-          ))}
-        </div >
-      )}
-    </motion.div >
-  );
-}

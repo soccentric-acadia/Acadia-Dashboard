@@ -9,7 +9,7 @@ import {
   useCreateLogBookmark,
   useSavedViews,
   useCreateSavedView,
-} from "@/lib/api/queries";
+} from "@/data";
 import { useSearchParams } from "next/navigation";
 import { SectionCard } from "@/components/primitives/section-card";
 import { Input } from "@/components/ui/input";

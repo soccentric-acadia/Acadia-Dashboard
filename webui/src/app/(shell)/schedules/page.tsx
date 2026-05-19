@@ -17,7 +17,7 @@ import {
   useEnableSchedule,
   useDisableSchedule,
   useTemplates,
-} from "@/lib/api/queries";
+} from "@/data";
 import { formatRelativeTime } from "@/lib/utils";
 import { toast } from "sonner";
 

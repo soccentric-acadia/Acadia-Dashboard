@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { motion } from "motion/react";
-import { useOtaList, useTriggerUpgrade, useRollbackUpgrade } from "@/lib/api/queries";
+import { useOtaList, useTriggerUpgrade, useRollbackUpgrade } from "@/data";
 import { SectionCard } from "@/components/primitives/section-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

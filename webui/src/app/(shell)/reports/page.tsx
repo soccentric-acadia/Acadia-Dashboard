@@ -6,18 +6,18 @@ import { Button } from "@/components/ui/button";
 import { SectionCard } from "@/components/primitives/section-card";
 import { Badge } from "@/components/ui/badge";
 import { pageVariants } from "@/components/motion/presets";
-import { useRuns, useExportRun, useRerunRun } from "@/lib/api/queries";
+import { useRuns, useExportRun, useRerunRun } from "@/data";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { formatRelativeTime } from "@/lib/utils";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { RunStatus } from "@/lib/api/types";
+import type { Run, RunStatus } from "@/lib/api/types";
 
 export default function ReportsPage() {
   const router = useRouter();
   const { data: runsPage, isLoading } = useRuns({ limit: 50 });
-  const runs = runsPage?.runs ?? [];
+  const runs = (runsPage?.runs ?? []) as Run[];
   const completedRuns = runs.filter((r) => r.status === "completed" || r.status === "failed");
 
   const exportRun = useExportRun();

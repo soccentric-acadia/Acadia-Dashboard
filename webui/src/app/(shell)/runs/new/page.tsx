@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { useCreateRun, useConfigs } from "@/lib/api/queries";
+import { useCreateRun, useConfigs } from "@/data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,8 +45,8 @@ function StepIndicator({ current, total, labels }: { current: number; total: num
             <div className={cn(
               "h-7 w-7 rounded-full border-2 flex items-center justify-center text-xs font-medium transition-all",
               i < current ? "border-primary bg-primary text-primary-foreground" :
-              i === current ? "border-primary bg-primary/10 text-primary" :
-              "border-border bg-background text-muted-foreground"
+                i === current ? "border-primary bg-primary/10 text-primary" :
+                  "border-border bg-background text-muted-foreground"
             )}>
               {i < current ? <Check className="h-3.5 w-3.5" /> : <span>{i + 1}</span>}
             </div>

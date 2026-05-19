@@ -18,7 +18,7 @@ import {
   useDeleteTemplate,
   useInstantiateTemplate,
   useCreateConfig,
-} from "@/lib/api/queries";
+} from "@/data";
 import { toast } from "sonner";
 import { formatRelativeTime } from "@/lib/utils";
 import type { TestMode } from "@/lib/api/types";

@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { useRun, useRunResults, useRunCompare } from "@/lib/api/queries";
+import { useRun, useRunResults, useRunCompare } from "@/data";
 import { SectionCard } from "@/components/primitives/section-card";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -37,7 +37,8 @@ function RunSelector({ value, onChange, label }: { value: string; onChange: (v: 
 // ─── RunSummaryCard ────────────────────────────────────────────────────────────
 
 function RunSummaryCard({ runId, side }: { runId: string; side: "A" | "B" }) {
-  const { data: run, isLoading } = useRun(runId);
+  const { data: _run, isLoading } = useRun(runId);
+  const run = _run as import("@/lib/api/types").Run | undefined;
   const { data: resultsPage } = useRunResults(runId, { limit: 500 });
   const results = resultsPage?.results ?? [];
 

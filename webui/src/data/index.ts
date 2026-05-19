@@ -15,6 +15,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useSimStore } from "./sim/engine";
 import { useResolver } from "./resolver";
 import { protoResultsToRestResults } from "./sim/adapter";
+import { statusToString } from "@/proto/types";
+import type { CompareRow, CompareCategory, Status } from "@/lib/api/types";
 import type { RunsFilter } from "./live/client";
 import {
     fetchRuns,
@@ -98,7 +100,8 @@ export function useRunResults(runId: string, params?: Record<string, unknown>) {
     });
 
     if (isSimMode) {
-        return { data: protoResultsToRestResults(simResultsRaw, runId), isLoading: false, error: null };
+        const results = protoResultsToRestResults(simResultsRaw, runId);
+        return { data: { results, total: results.length }, isLoading: false, error: null };
     }
     return liveQuery;
 }
@@ -122,7 +125,8 @@ export function useModuleResults(moduleId: string, params?: Record<string, unkno
     });
 
     if (isSimMode) {
-        return { data: protoResultsToRestResults(simResultsRaw), isLoading: false, error: null };
+        const results = protoResultsToRestResults(simResultsRaw);
+        return { data: { results, total: results.length }, isLoading: false, error: null };
     }
     return liveQuery;
 }
@@ -140,7 +144,19 @@ export function useTemplates() {
     });
 
     if (isSimMode) {
-        return { data: simTemplates, isLoading: false, error: null };
+        // Normalize SimTemplate → REST Template shape
+        const normalized = simTemplates.map((t) => ({
+            id: t.id,
+            name: t.name,
+            description: t.description ?? "",
+            mode: t.mode,
+            common_config: undefined,
+            modules: undefined,
+            is_archived: false,
+            created_at: t.createdAt,
+            created_by: "sim",
+        }));
+        return { data: normalized, isLoading: false, error: null };
     }
     return liveQuery;
 }
@@ -158,7 +174,19 @@ export function useSchedules() {
     });
 
     if (isSimMode) {
-        return { data: simSchedules, isLoading: false, error: null };
+        // Normalize SimSchedule → REST Schedule shape
+        const normalized = simSchedules.map((s) => ({
+            id: s.id,
+            template_id: s.templateId,
+            cron_expression: s.cron ?? "",
+            run_at: s.oneTimeAt ?? "",
+            enabled: s.enabled,
+            last_run_at: s.lastRunAt ?? "",
+            next_run_at: s.nextRunAt ?? "",
+            created_at: "",
+            created_by: "sim",
+        }));
+        return { data: normalized, isLoading: false, error: null };
     }
     return liveQuery;
 }
@@ -243,7 +271,23 @@ export function useRunCompare(runAId: string, runBId: string) {
     if (isSimMode) {
         const aResults = simStore.results[runAId] ?? {};
         const bResults = simStore.results[runBId] ?? {};
-        return { data: { a: aResults, b: bResults }, isLoading: false, error: null };
+        // Build normalized RunComparison rows from sim data
+        const allModuleIds = Array.from(new Set([...Object.keys(aResults), ...Object.keys(bResults)]));
+        const rows: CompareRow[] = [];
+        for (const moduleId of allModuleIds) {
+            const aList = (aResults[moduleId] ?? []);
+            const bList = (bResults[moduleId] ?? []);
+            const allTestIds = Array.from(new Set([...aList.map((r) => r.testId), ...bList.map((r) => r.testId)]));
+            for (const testId of allTestIds) {
+                const a = aList.find((r) => r.testId === testId);
+                const b = bList.find((r) => r.testId === testId);
+                const statusA = a ? (statusToString(a.status) as Status) : null;
+                const statusB = b ? (statusToString(b.status) as Status) : null;
+                const cat: CompareCategory = !a ? "added" : !b ? "removed" : statusA === statusB ? "same" : "regression";
+                rows.push({ module_id: moduleId, test_id: testId, name: testId, status_a: statusA, status_b: statusB, severity_a: null, severity_b: null, category: cat, metrics_drift: {} });
+            }
+        }
+        return { data: { run_a_id: runAId, run_b_id: runBId, rows }, isLoading: false, error: null };
     }
     return liveQuery;
 }
@@ -297,3 +341,56 @@ function generateSimLogs() {
         message: messages[i % messages.length],
     }));
 }
+
+// ── Re-exports from lib/api/queries (mutations + live-only hooks) ─────────────
+// These are re-exported here so pages only ever import from @/data.
+// Mutation hooks always route to the live API; sim mutations go via useSimActions().
+export {
+    useCreateRun,
+    useCancelRun,
+    usePauseRun,
+    useResumeRun,
+    useDeleteRun,
+    useSetBaseline,
+    useRerunRun,
+    useExportRun,
+    useActiveRun,
+    useRunSSE,
+    useRunLogs,
+    useGlobalLogs,
+    useSearchLogs,
+    useLogBookmarks,
+    useCreateLogBookmark,
+    useDeleteLogBookmark,
+    useSavedViews,
+    useCreateSavedView,
+    useConfigs,
+    useConfig,
+    useCreateConfig,
+    useUpdateConfig,
+    useDeleteConfig,
+    useArchiveConfig,
+    useCreateTemplate,
+    useDeleteTemplate,
+    useArchiveTemplate,
+    useInstantiateTemplate,
+    useCreateSchedule,
+    useDeleteSchedule,
+    useEnableSchedule,
+    useDisableSchedule,
+    useTriggerUpgrade,
+    useRollbackUpgrade,
+    useOtaUpgrade,
+    useAlertRules,
+    useCreateAlertRule,
+    useUpdateAlertRule,
+    useDeleteAlertRule,
+    useRetentionSettings,
+    useUpdateRetentionSettings,
+    useUpdateBoard,
+    useDeleteBoard,
+    useChangePassword,
+    useBoard as useBoardQuery,
+    useModuleTrend,
+} from "@/lib/api/queries";
+export type { RunsFilter } from "./live/client";

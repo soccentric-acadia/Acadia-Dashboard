@@ -16,7 +16,7 @@ import {
   useAlertRules, useCreateAlertRule, useUpdateAlertRule, useDeleteAlertRule,
   useRetentionSettings, useUpdateRetentionSettings,
   useUpdateBoard, useDeleteBoard, useChangePassword,
-} from "@/lib/api/queries";
+} from "@/data";
 import { toast } from "sonner";
 import type { CreateAlertInput } from "@/lib/api/client";
 

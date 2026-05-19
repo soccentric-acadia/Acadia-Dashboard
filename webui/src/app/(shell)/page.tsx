@@ -142,10 +142,10 @@ export default function DashboardPage() {
   const modules = React.useMemo(() => Object.values(MODULE_CATALOG), []);
   const modulesLoading = false;
 
-  const recentRuns = recentData?.runs ?? [];
-  const activeRuns = activeData?.runs ?? [];
-  const failedRuns = failedData?.runs ?? [];
-  const completedRuns = completedData?.runs ?? [];
+  const recentRuns = (recentData?.runs ?? []) as Run[];
+  const activeRuns = (activeData?.runs ?? []) as Run[];
+  const failedRuns = (failedData?.runs ?? []) as Run[];
+  const completedRuns = (completedData?.runs ?? []) as Run[];
 
   const totalCompleted = completedData?.total ?? completedRuns.length;
   const totalFailed = failedData?.total ?? failedRuns.length;

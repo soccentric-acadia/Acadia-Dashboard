@@ -9,7 +9,7 @@ import {
   useRun, useRunResults, useRunSSE,
   useCancelRun, usePauseRun, useResumeRun,
   useSetBaseline, useRerunRun, useExportRun, useDeleteRun,
-} from "@/lib/api/queries";
+} from "@/data";
 import { LiveDot } from "@/components/primitives/live-dot";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -73,7 +73,8 @@ function ResultRow({ result }: { result: TestResult }) {
 export default function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = use(params);
   const router = useRouter();
-  const { data: run, isLoading } = useRun(runId);
+  const { data: _run, isLoading } = useRun(runId);
+  const run = _run as Run | undefined;
   const { data: resultsPage, isLoading: resultsLoading } = useRunResults(runId, { limit: 500 });
   const results = resultsPage?.results ?? [];
 

@@ -3,7 +3,7 @@
 import { use } from "react";
 import Link from "next/link";
 import { useBoard } from "@/lib/board/context";
-import { useRuns } from "@/lib/api/queries";
+import { useRuns } from "@/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,14 +40,14 @@ export default function TargetDetailPage({ params }: { params: Promise<{ targetI
     }
 
     const fields = [
-        { label: "Board ID",        value: <span className="font-mono text-xs">{board.id}</span> },
-        { label: "Hostname",        value: board.hostname },
-        { label: "Model",           value: board.model ?? "\u2014" },
-        { label: "HAL Version",     value: board.hal_version ?? "\u2014" },
-        { label: "Client Version",  value: board.client_version ?? "\u2014" },
-        { label: "OS Version",      value: board.os_version ?? "\u2014" },
-        { label: "First Seen",      value: board.first_seen ? formatRelativeTime(board.first_seen) : "\u2014" },
-        { label: "Last Seen",       value: board.last_seen  ? formatRelativeTime(board.last_seen)  : "Now" },
+        { label: "Board ID", value: <span className="font-mono text-xs">{board.id}</span> },
+        { label: "Hostname", value: board.hostname },
+        { label: "Model", value: board.model ?? "\u2014" },
+        { label: "HAL Version", value: board.hal_version ?? "\u2014" },
+        { label: "Client Version", value: board.client_version ?? "\u2014" },
+        { label: "OS Version", value: board.os_version ?? "\u2014" },
+        { label: "First Seen", value: board.first_seen ? formatRelativeTime(board.first_seen) : "\u2014" },
+        { label: "Last Seen", value: board.last_seen ? formatRelativeTime(board.last_seen) : "Now" },
     ];
 
     return (

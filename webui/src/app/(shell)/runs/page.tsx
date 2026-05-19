@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
-import { useRuns } from "@/lib/api/queries";
+import { useRuns } from "@/data";
 import { RunStateBadge } from "@/components/runs/run-state-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +27,7 @@ function RunsPageContent() {
   const searchParams = useSearchParams();
   const [status, setStatus] = React.useState(searchParams.get("status") ?? "");
   const { data, isLoading } = useRuns({ status: status || undefined, limit: 50 });
-  const runs = data?.runs ?? [];
+  const runs = (data?.runs ?? []) as import("@/lib/api/types").Run[];
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-5">

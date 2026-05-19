@@ -4,10 +4,9 @@ import * as React from "react";
 import Link from "next/link";
 import { use } from "react";
 import { motion } from "motion/react";
-import { useQuery } from "@tanstack/react-query";
-import { getModuleRegistry } from "@/lib/proto/registry";
+import { MODULE_CATALOG } from "@/proto/module-catalog";
 import { getModuleLabel, cn } from "@/lib/utils";
-import { useModuleResults } from "@/lib/api/queries";
+import { useModuleResults } from "@/data";
 import { ModuleIcon } from "@/components/primitives/module-icon";
 import { LiveDot } from "@/components/primitives/live-dot";
 import type { LiveDotState } from "@/components/primitives/live-dot";
@@ -48,18 +47,12 @@ function lastDotState(results: TestResult[]): LiveDotState {
 export default function ModuleDetailPage({ params }: { params: Promise<{ moduleId: string }> }) {
   const { moduleId } = use(params);
 
-  const { data: modules, isLoading: modulesLoading } = useQuery({
-    queryKey: ["modules"],
-    queryFn: getModuleRegistry,
-    staleTime: Infinity,
-  });
-
+  const moduleDef = MODULE_CATALOG[moduleId];
   const { data: resultsPage, isLoading: resultsLoading } = useModuleResults(moduleId, { limit: 200 });
 
   const results = resultsPage?.results ?? [];
 
-  const label = getModuleLabel(moduleId);
-  void modules;
+  const label = moduleDef?.displayName ?? getModuleLabel(moduleId);
 
   // KPIs
   const totalRuns = results.length;
@@ -82,7 +75,7 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
     ? numericKeys(results, "metrics")
     : [];
 
-  const isLoading = modulesLoading || resultsLoading;
+  const isLoading = resultsLoading;
   const dotState = lastDotState(results);
 
   if (isLoading) {
