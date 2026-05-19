@@ -18,12 +18,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
-import { Search, Bookmark, Save, ExternalLink } from "lucide-react";
+import { Search, Bookmark, Save, ExternalLink, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pageVariants } from "@/components/motion/presets";
 import { toast } from "sonner";
 import type { LogEntry } from "@/lib/api/types";
+
+/** ±5 000 ms window around the correlated result timestamp. */
+const CORRELATION_WINDOW_MS = 5_000;
 
 const LEVEL_COLORS: Record<string, string> = {
   ERROR: "text-status-error",
@@ -44,10 +48,18 @@ export default function LogsPage() {
 function LogsPageContent() {
   const searchParams = useSearchParams();
   const runId = searchParams.get("run") ?? "";
+  /** result_id from a jump link — e.g. /logs?result_id=<uuid>&result_ts=<iso> */
+  const resultId = searchParams.get("result_id") ?? "";
+  const resultTs = searchParams.get("result_ts") ?? "";
+  const correlationAnchorMs = resultTs ? new Date(resultTs).getTime() : null;
+
   const [filter, setFilter] = React.useState("");
   const [level, setLevel] = React.useState("");
   const [source, setSource] = React.useState("");
   const [selectedViewId, setSelectedViewId] = React.useState("");
+
+  /** Ref for the first correlated log row — used for auto-scroll. */
+  const firstCorrelatedRef = React.useRef<HTMLDivElement | null>(null);
 
   const runLogs = useRunLogs(runId || null, { level: level || undefined });
   const globalLogs = useGlobalLogs({ level: level || undefined, source: source || undefined });
@@ -70,6 +82,16 @@ function LogsPageContent() {
 
   const filtered = logs;
 
+  /** Scroll to the first correlated entry once logs are loaded. */
+  React.useEffect(() => {
+    if (!correlationAnchorMs || isLoading || filtered.length === 0) return;
+    // Give the DOM a tick to render before scrolling
+    const id = setTimeout(() => {
+      firstCorrelatedRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(id);
+  }, [correlationAnchorMs, isLoading, filtered.length]);
+
   const onSaveCurrentView = async () => {
     const name = window.prompt("Saved view name", runId ? "Run logs view" : "Global logs view");
     if (!name) return;
@@ -87,6 +109,19 @@ function LogsPageContent() {
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-5">
+      {/* ── Result correlation banner ────────────────────────────────────── */}
+      {resultId && (
+        <Alert className="border-primary/40 bg-primary/5">
+          <Link2 className="h-4 w-4" />
+          <AlertDescription className="font-mono text-xs">
+            Showing context for result{" "}
+            <span className="font-semibold">{resultId.slice(0, 20)}…</span>
+            {correlationAnchorMs && (
+              <> — entries within ±5s of {new Date(correlationAnchorMs).toLocaleTimeString()} are highlighted</>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold">Logs</h1>
@@ -158,40 +193,61 @@ function LogsPageContent() {
         ) : (
           <ScrollArea className="h-[560px]">
             <div className="font-mono text-[11px] leading-5 p-3 space-y-0.5">
-              {filtered.map((entry, i) => (
-                <div key={i} className="flex gap-3 py-0.5 hover:bg-accent/10 rounded px-1">
-                  <span className="text-muted-foreground/60 shrink-0 w-20">{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                  <span className={cn("shrink-0 w-12 font-semibold", LEVEL_COLORS[(entry.severity || "").toUpperCase()] ?? "text-foreground")}>{entry.severity}</span>
-                  <span className="break-all">{entry.message}</span>
-                  <div className="ml-auto flex items-center gap-1 shrink-0">
-                    {bookmarkedIds.has(entry.id) ? <Badge variant="secondary">Saved</Badge> : null}
-                    {entry.run_id && entry.run_id !== runId && (
-                      <Button variant="ghost" size="icon" className="h-6 w-6" asChild aria-label="View run">
-                        <Link href={`/runs/${entry.run_id}`}>
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
+              {filtered.map((entry, i) => {
+                const entryMs = new Date(entry.timestamp).getTime();
+                const isCorrelated =
+                  correlationAnchorMs !== null &&
+                  Math.abs(entryMs - correlationAnchorMs) <= CORRELATION_WINDOW_MS;
+                // Track the first correlated row for auto-scroll
+                const isFirstCorrelated =
+                  isCorrelated &&
+                  filtered
+                    .slice(0, i)
+                    .every((e) => Math.abs(new Date(e.timestamp).getTime() - (correlationAnchorMs ?? 0)) > CORRELATION_WINDOW_MS);
+
+                return (
+                  <div
+                    key={i}
+                    ref={isFirstCorrelated ? firstCorrelatedRef : undefined}
+                    data-result-correlated={isCorrelated ? "true" : undefined}
+                    className={cn(
+                      "flex gap-3 py-0.5 hover:bg-accent/10 rounded px-1",
+                      isCorrelated && "bg-primary/10 ring-1 ring-primary/30 animate-result-flash",
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={async () => {
-                        try {
-                          await createBookmark.mutateAsync({ log_id: entry.id });
-                          toast.success("Log bookmarked");
-                        } catch (e) {
-                          const message = e instanceof Error ? e.message : "Failed to bookmark log";
-                          toast.error(message);
-                        }
-                      }}
-                      aria-label="Bookmark log"
-                    >
-                      <Bookmark className="h-3.5 w-3.5" />
-                    </Button>
+                  >
+                    <span className="text-muted-foreground/60 shrink-0 w-20">{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                    <span className={cn("shrink-0 w-12 font-semibold", LEVEL_COLORS[(entry.severity || "").toUpperCase()] ?? "text-foreground")}>{entry.severity}</span>
+                    <span className="break-all">{entry.message}</span>
+                    <div className="ml-auto flex items-center gap-1 shrink-0">
+                      {bookmarkedIds.has(entry.id) ? <Badge variant="secondary">Saved</Badge> : null}
+                      {entry.run_id && entry.run_id !== runId && (
+                        <Button variant="ghost" size="icon" className="h-6 w-6" asChild aria-label="View run">
+                          <Link href={`/runs/${entry.run_id}`}>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={async () => {
+                          try {
+                            await createBookmark.mutateAsync({ log_id: entry.id });
+                            toast.success("Log bookmarked");
+                          } catch (e) {
+                            const message = e instanceof Error ? e.message : "Failed to bookmark log";
+                            toast.error(message);
+                          }
+                        }}
+                        aria-label="Bookmark log"
+                      >
+                        <Bookmark className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </ScrollArea>
         )}
