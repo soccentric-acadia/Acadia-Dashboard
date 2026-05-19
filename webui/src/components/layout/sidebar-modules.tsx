@@ -23,7 +23,7 @@ import {
   Sidebar, SidebarContent, SidebarHeader, SidebarFooter,
   SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem,
-  SidebarProvider, SidebarRail, SidebarTrigger, useSidebar,
+  SidebarRail, SidebarTrigger, useSidebar,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";

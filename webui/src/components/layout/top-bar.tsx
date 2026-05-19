@@ -19,6 +19,7 @@ import { useBoard } from "@/lib/board/context";
 import { useRuns } from "@/lib/api/queries";
 import { useHealth } from "@/lib/api/queries";
 import { LiveDot } from "@/components/primitives/live-dot";
+import { ConnectionPill } from "@/components/primitives/connection-pill";
 import { UserMenu } from "@/components/layout/user-menu";
 import { CommandPalette, useCommandPalette } from "@/components/layout/command-palette";
 import { Button } from "@/components/ui/button";
@@ -31,8 +32,9 @@ import {
 import {
     LayoutDashboard, Play, PlusCircle, BookMarked, CalendarClock,
     ScrollText, FileText, Upload, Settings, HelpCircle, Search,
-    Moon, Sun, Monitor, Cpu, WifiOff,
+    Moon, Sun, Monitor, Cpu, WifiOff, Bell,
 } from "lucide-react";
+import { useConnectionStore } from "@/state/connection";
 
 const NAV_ITEMS = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -177,6 +179,9 @@ export function TopBar() {
     const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
     const { data: activeRuns } = useRuns({ status: "running", limit: 1 });
     const hasActiveRun = (activeRuns?.runs?.length ?? 0) > 0;
+    const connectionState = useConnectionStore((s) => s.state);
+    const setSimulated = useConnectionStore((s) => s.setSimulated);
+    const setLive = useConnectionStore((s) => s.setLive);
 
     return (
         <>
@@ -219,7 +224,7 @@ export function TopBar() {
                     <ActiveRunBadge />
                 </div>
 
-                {/* ── Right: ⌘K + theme + user ────────────────────────────────── */}
+                {/* ── Right: ⌘K + connection pill + theme + bell + user ─────── */}
                 <div className="flex items-center gap-1 shrink-0">
                     <Button
                         variant="ghost"
@@ -233,7 +238,15 @@ export function TopBar() {
                             <span>⌘</span>K
                         </kbd>
                     </Button>
+                    <ConnectionPill
+                        state={connectionState}
+                        onSwitchToLive={setLive}
+                        onSwitchToSimulated={setSimulated}
+                    />
                     <ThemeToggle />
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Notifications">
+                        <Bell className="h-4 w-4" />
+                    </Button>
                     <UserMenu />
                 </div>
             </header>

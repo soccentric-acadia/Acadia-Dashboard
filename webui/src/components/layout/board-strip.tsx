@@ -17,6 +17,10 @@ import { LiveDot } from "@/components/primitives/live-dot";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
+import { useConnectionStore } from "@/state/connection";
+import { useSimStore, generateBoardVitals } from "@/data/sim/engine";
+import { getProfile } from "@/data/sim/profiles";
+import { usePreferencesStore } from "@/state/preferences";
 
 function VitalBadge({
     label,
@@ -73,14 +77,35 @@ export function BoardStrip() {
     const { board } = useBoard();
     const { data: activeRunsData } = useRuns({ status: "running", limit: 1 });
     const activeRun = activeRunsData?.runs?.[0] ?? null;
+    const connectionState = useConnectionStore((s) => s.state);
+    const simProfile = usePreferencesStore((s) => s.simProfile);
+    const simActiveRunId = useSimStore((s) => s.activeRunId);
+    const simRuns = useSimStore((s) => s.runs);
+    const simActiveRun = simRuns.find((r) => r.id === simActiveRunId) ?? null;
 
+    const isSimMode = connectionState === "simulated";
     const online = board?.status === "online";
+
+    // Simulated vitals — regenerated periodically
+    const [simVitals, setSimVitals] = React.useState(() =>
+        generateBoardVitals(getProfile(simProfile))
+    );
+    React.useEffect(() => {
+        if (!isSimMode) return;
+        const update = () => setSimVitals(generateBoardVitals(getProfile(simProfile)));
+        const id = setInterval(update, 5_000);
+        return () => clearInterval(id);
+    }, [isSimMode, simProfile]);
+
+    const displayActiveRun = isSimMode ? simActiveRun : activeRun;
 
     return (
         <div
             className={cn(
                 "flex h-9 shrink-0 items-center justify-between gap-3 border-b px-4",
-                "bg-card/50 backdrop-blur-sm border-border/50",
+                isSimMode
+                    ? "bg-[hsl(var(--status-simulated)/0.06)] backdrop-blur-sm border-[hsl(var(--status-simulated)/0.25)]"
+                    : "bg-card/50 backdrop-blur-sm border-border/50",
             )}
             role="status"
             aria-label="Board status strip"
@@ -88,10 +113,14 @@ export function BoardStrip() {
             {/* ── Left: Board identity ─────────────────────────────────────────── */}
             <div className="flex items-center gap-2 shrink-0">
                 <LiveDot
-                    state={!board ? "disconnected" : online ? "idle" : "disconnected"}
+                    state={isSimMode ? "simulated" : !board ? "disconnected" : online ? "idle" : "disconnected"}
                     size="md"
                 />
-                {board ? (
+                {isSimMode ? (
+                    <span className="font-mono text-[11px] font-medium text-[hsl(var(--status-simulated))]">
+                        SIM · {simProfile}
+                    </span>
+                ) : board ? (
                     <Link
                         href="/settings?tab=board"
                         className="font-mono text-[11px] font-medium text-foreground/80 hover:text-foreground transition-colors"
@@ -106,12 +135,18 @@ export function BoardStrip() {
 
             {/* ── Center: Vitals row ──────────────────────────────────────────── */}
             <div className="flex items-center gap-3 overflow-x-auto scrollbar-none">
-                {board && online ? (
+                {isSimMode ? (
                     <>
-                        {/* These are populated from real data when available.
-                The board object has os_version, hal_version etc.
-                Vitals like CPU temp come from a future /api/v1/target/vitals endpoint.
-                For now we show what we have. */}
+                        <VitalBadge label="CPU" value={`${simVitals.cpuTempCelsius}°C`} />
+                        <Separator orientation="vertical" className="h-3.5" />
+                        <VitalBadge label="LOAD" value={`${simVitals.cpuLoadPct}%`} />
+                        <Separator orientation="vertical" className="h-3.5" />
+                        <VitalBadge label="RAM" value={`${(simVitals.ramUsedMb / 1024).toFixed(1)} GB`} />
+                        <Separator orientation="vertical" className="h-3.5" />
+                        <VitalBadge label="NET" value={simVitals.networkState === "up" ? "UP" : "DOWN"} />
+                    </>
+                ) : board && online ? (
+                    <>
                         {board.os_version && (
                             <VitalBadge label="OS" value={board.os_version} />
                         )}
@@ -146,17 +181,17 @@ export function BoardStrip() {
 
             {/* ── Right: Active run mini-readout ─────────────────────────────── */}
             <div className="flex items-center gap-2 shrink-0">
-                {activeRun ? (
+                {displayActiveRun ? (
                     <Link
-                        href={`/runs/${activeRun.id}`}
+                        href={`/runs/${displayActiveRun.id}`}
                         className="flex items-center gap-1.5 text-[10px] text-status-running-fg hover:text-status-running transition-colors"
                     >
                         <LiveDot state="running" size="xs" />
                         <span className="font-medium truncate max-w-[12rem]">
-                            {activeRun.name || activeRun.id.slice(0, 12)}
+                            {displayActiveRun.name || displayActiveRun.id.slice(0, 12)}
                         </span>
                         <span className="text-muted-foreground hidden sm:inline">
-                            · {activeRun.mode?.replace("_", " ")}
+                            · {displayActiveRun.mode?.replace("_", " ")}
                         </span>
                     </Link>
                 ) : (

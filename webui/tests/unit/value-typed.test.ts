@@ -125,14 +125,15 @@ describe("compare", () => {
 // ── extractNumericSeries ──────────────────────────────────────────────────────
 
 function makeResult(overrides: Partial<TestResult> & { metrics?: Record<string, TypedValue> }): TestResult {
+    const { metrics: overrideMetrics, ...restOverrides } = overrides;
     return {
         id: "r1", run_id: "run1", module_id: "cpu", module_version: "1",
         test_id: "t1", name: "test", sequence: 1, timestamp: "2024-01-01T00:00:00Z",
         duration_ns: 1000, mode: "single_shot", status: "PASS", severity: "INFO",
-        error_message: "", reason: {}, metrics: {}, monitoring: {}, event: [],
+        error_message: "", reason: {}, monitoring: {}, event: [],
         subtests: [], payload_type_url: "", payload_b64: "",
-        ...overrides,
-        metrics: overrides.metrics ?? {},
+        ...restOverrides,
+        metrics: overrideMetrics ?? {},
     } as unknown as TestResult;
 }
 

@@ -19,7 +19,8 @@ export type LiveDotState =
     | "skipped"
     | "aborted"
     | "never"
-    | "disconnected";
+    | "disconnected"
+    | "simulated";
 
 const STATE_STYLES: Record<LiveDotState, { dot: string; pulse?: boolean; ring?: string }> = {
     idle: { dot: "bg-muted-foreground/50" },
@@ -32,6 +33,7 @@ const STATE_STYLES: Record<LiveDotState, { dot: string; pulse?: boolean; ring?: 
     aborted: { dot: "bg-status-aborted" },
     never: { dot: "border-2 border-muted-foreground/30 bg-transparent" },
     disconnected: { dot: "bg-muted-foreground/20 border border-muted-foreground/30" },
+    simulated: { dot: "bg-[hsl(var(--status-simulated))]", pulse: true, ring: "border-[hsl(var(--status-simulated)/0.4)]" },
 };
 
 const SIZE_CLASSES = {

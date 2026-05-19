@@ -6,7 +6,6 @@ import {
     MOCK_BOARD,
     MOCK_MODULES,
     mockRuns,
-    MOCK_RESULTS,
     MOCK_PAGINATED_RESULTS,
     MOCK_LOGS,
 } from "./mock";

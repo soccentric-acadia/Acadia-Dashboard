@@ -70,6 +70,16 @@
         --status-never: 220 14% 70%;
         --status-never-fg: 220 14% 50%;
         --status-never-ring: 220 14% 80%;
+        /* SIMULATED — electric purple */
+        --status-simulated: 270 80% 60%;
+        --status-simulated-fg: 270 80% 35%;
+        --status-simulated-bg: 270 80% 96%;
+        --status-simulated-ring: 270 80% 65%;
+        /* DISCONNECTED — hollow muted */
+        --status-disconnected: 220 14% 55%;
+        --status-disconnected-fg: 220 14% 40%;
+        --status-disconnected-bg: 220 14% 96%;
+        --status-disconnected-ring: 220 14% 65%;
     }
 
     .dark {
@@ -138,6 +148,16 @@
         --status-never: 220 14% 35%;
         --status-never-fg: 220 14% 55%;
         --status-never-ring: 220 14% 30%;
+        /* SIMULATED — electric purple (dark) */
+        --status-simulated: 270 80% 65%;
+        --status-simulated-fg: 270 80% 85%;
+        --status-simulated-bg: 270 80% 10%;
+        --status-simulated-ring: 270 80% 55%;
+        /* DISCONNECTED — hollow muted (dark) */
+        --status-disconnected: 220 14% 40%;
+        --status-disconnected-fg: 220 14% 60%;
+        --status-disconnected-bg: 220 14% 13%;
+        --status-disconnected-ring: 220 14% 35%;
     }
 }
 
