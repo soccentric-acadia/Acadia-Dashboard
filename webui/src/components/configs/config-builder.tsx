@@ -1,15 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery } from "@tanstack/react-query";
-import { getModuleRegistry, getModuleLabel } from "@/lib/proto/registry";
+import { MODULE_CATALOG, CATEGORY_ORDER } from "@/proto/module-catalog";
 import { useConfigStore } from "@/lib/config-store";
 import type { TestMode } from "@/lib/api/types";
-import type { ModuleInfo } from "@/lib/proto/registry";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Clock, Eye, Zap, Check } from "lucide-react";
+import { SchemaForm } from "@/components/form-builder/schema-form";
+import { descriptorFieldsToSchemaFields } from "@/lib/schema/module-schema";
 
 const MODES: Array<{ value: TestMode; label: string; description: string; icon: React.ComponentType<{ className?: string }> }> = [
     { value: "single_shot", label: "Single Shot", description: "Run once, return one result.", icon: Check },
@@ -56,11 +56,13 @@ export function ConfigBuilder({ defaultValues, onSaved }: ConfigBuilderProps) {
         defaultValues?.moduleConfig ?? {}
     );
 
-    const { data: modules } = useQuery({
-        queryKey: ["modules"],
-        queryFn: getModuleRegistry,
-        staleTime: Infinity,
-    });
+    // All modules from static catalog — always available, no fetch needed
+    const modules = useMemo(() =>
+        Object.values(MODULE_CATALOG).sort((a, b) => {
+            const catOrder = CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category);
+            return catOrder !== 0 ? catOrder : a.displayName.localeCompare(b.displayName);
+        }),
+        []);
 
     const {
         register,
@@ -146,9 +148,9 @@ export function ConfigBuilder({ defaultValues, onSaved }: ConfigBuilderProps) {
                                 <SelectValue placeholder="Select a module…" />
                             </SelectTrigger>
                             <SelectContent className="max-h-80">
-                                {modules?.map((m: ModuleInfo) => (
+                                {modules.map((m) => (
                                     <SelectItem key={m.id} value={m.id}>
-                                        {getModuleLabel(m.id)}
+                                        {m.displayName}
                                         {m.status === "deprecated" && (
                                             <Badge variant="secondary" className="ml-2 text-xs">deprecated</Badge>
                                         )}
@@ -271,8 +273,7 @@ export function ConfigBuilder({ defaultValues, onSaved }: ConfigBuilderProps) {
     );
 }
 
-// Generic module config section — renders a JSON textarea as a fallback.
-// The form-builder will replace this with schema-driven fields.
+// Schema-driven module config section — driven by MODULE_CATALOG configSchema.
 function ModuleConfigSection({
     moduleId,
     value,
@@ -282,34 +283,21 @@ function ModuleConfigSection({
     value: Record<string, unknown>;
     onChange: (v: Record<string, unknown>) => void;
 }) {
-    const [raw, setRaw] = useState(() => JSON.stringify(value, null, 2) || "{}");
-    const [err, setErr] = useState("");
+    const moduleDef = MODULE_CATALOG[moduleId];
+    const fields = useMemo(
+        () => moduleDef ? descriptorFieldsToSchemaFields(moduleDef.configSchema.fields) : [],
+        [moduleDef]
+    );
 
-    const handleChange = (text: string) => {
-        setRaw(text);
-        try {
-            onChange(JSON.parse(text));
-            setErr("");
-        } catch {
-            setErr("Invalid JSON");
-        }
-    };
+    if (!moduleDef) {
+        return <p className="text-xs text-muted-foreground italic">Unknown module.</p>;
+    }
 
     return (
-        <div className="space-y-1">
-            <Label>Module config (JSON)</Label>
-            <p className="text-xs text-muted-foreground">
-                Schema-driven form for <strong>{getModuleLabel(moduleId)}</strong> — coming in Checkpoint C.
-                For now, enter module-specific config as JSON.
-            </p>
-            <textarea
-                className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                rows={6}
-                value={raw}
-                onChange={(e) => handleChange(e.target.value)}
-                aria-label="Module config JSON"
-            />
-            {err && <p className="text-xs text-destructive">{err}</p>}
-        </div>
+        <SchemaForm
+            fields={fields}
+            value={value}
+            onChange={onChange}
+        />
     );
 }

@@ -4,9 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { useBoard } from "@/lib/board/context";
-import { useRuns, useHealth } from "@/lib/api/queries";
+import { useRuns } from "@/data";
 import { useQuery } from "@tanstack/react-query";
-import { getModuleRegistry } from "@/lib/proto/registry";
+import { fetchHealth } from "@/lib/api/client";
+import { MODULE_CATALOG } from "@/proto/module-catalog";
 import { KpiCard } from "@/components/primitives/kpi-card";
 import { SectionCard } from "@/components/primitives/section-card";
 import { LiveDot } from "@/components/primitives/live-dot";
@@ -125,17 +126,21 @@ function ModuleTile({ id }: { id: string }) {
 
 export default function DashboardPage() {
   const { board } = useBoard();
-  const { isError: serverUnreachable } = useHealth();
+  const { isError: serverUnreachable } = useQuery({
+    queryKey: ["health"],
+    queryFn: fetchHealth,
+    staleTime: 15_000,
+    retry: false,
+  });
 
   const { data: recentData, isLoading: recentLoading } = useRuns({ limit: 15 });
   const { data: activeData } = useRuns({ status: "running", limit: 5 });
   const { data: failedData } = useRuns({ status: "failed", limit: 5 });
   const { data: completedData } = useRuns({ status: "completed", limit: 100 });
-  const { data: modules = [], isLoading: modulesLoading } = useQuery({
-    queryKey: ["modules"],
-    queryFn: getModuleRegistry,
-    staleTime: Infinity,
-  });
+
+  // Module list from static catalog — always available, no server fetch needed
+  const modules = React.useMemo(() => Object.values(MODULE_CATALOG), []);
+  const modulesLoading = false;
 
   const recentRuns = recentData?.runs ?? [];
   const activeRuns = activeData?.runs ?? [];

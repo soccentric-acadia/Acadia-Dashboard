@@ -63,6 +63,29 @@ export function SchemaFieldRenderer({ field, value, onChange, error }: SchemaFie
                     error={error}
                 />
             );
+        case "repeated_scalar":
+            // Render as comma-separated text input; stores string[]
+            return (
+                <div className="space-y-1">
+                    <Label htmlFor={`field-${field.name}`}>
+                        {field.label ?? field.name}
+                        {field.required && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                    {field.description && (
+                        <p className="text-xs text-muted-foreground">{field.description}</p>
+                    )}
+                    <Input
+                        id={`field-${field.name}`}
+                        placeholder="Comma-separated values (empty = all)"
+                        value={Array.isArray(value) ? (value as string[]).join(", ") : ""}
+                        onChange={(e) => {
+                            const raw = e.target.value;
+                            onChange(raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : []);
+                        }}
+                    />
+                    {error && <p className="text-xs text-destructive">{error}</p>}
+                </div>
+            );
         default:
             // Fallback: render as JSON text for complex types (message, oneof, repeated, Any, Timestamp, Duration)
             return (
