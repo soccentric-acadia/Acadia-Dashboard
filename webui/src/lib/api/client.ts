@@ -2,6 +2,14 @@
 // All functions use native fetch() + server-side session cookies for auth.
 // No GraphQL — Server exposes REST at /api/v1/*.
 
+import {
+    MOCK_BOARD,
+    MOCK_MODULES,
+    mockRuns,
+    MOCK_RESULTS,
+    MOCK_PAGINATED_RESULTS,
+    MOCK_LOGS,
+} from "./mock";
 import type {
     Board,
     Run,
@@ -73,11 +81,33 @@ export class ApiError extends Error {
     get isNotFound() { return this.status === 404; }
 }
 
+/**
+ * Returns true when the error is a network-level failure (server unreachable),
+ * i.e. a TypeError thrown by fetch() before any HTTP response is received.
+ */
+export function isOfflineError(err: unknown): err is TypeError {
+    return err instanceof TypeError;
+}
+
+/**
+ * Wraps an API call and returns `fallback` when the server is unreachable.
+ * Auth errors (401) are still propagated so the login page can handle them.
+ */
+async function withOfflineFallback<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+    try {
+        return await fn();
+    } catch (err) {
+        if (isOfflineError(err)) return fallback;
+        throw err;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Health
 // ---------------------------------------------------------------------------
 
 export async function fetchHealth(): Promise<{ status: string }> {
+    // Health intentionally does NOT fall back — callers use isError to show "Offline".
     return request("GET", "/api/v1/health");
 }
 
@@ -127,6 +157,7 @@ export async function fetchBoard(): Promise<Board | null> {
         return await request<Board>("GET", "/api/v1/target");
     } catch (e) {
         if (e instanceof ApiError && e.isNotFound) return null;
+        if (isOfflineError(e)) return MOCK_BOARD;
         throw e;
     }
 }
@@ -155,8 +186,13 @@ export interface RunsFilter {
 }
 
 export async function fetchRuns(filter: RunsFilter = {}): Promise<PaginatedRuns> {
-    const res = await request<{ runs: Run[]; total: number }>("GET", "/api/v1/runs", undefined, filter as Record<string, string | number | boolean | undefined>);
-    return { runs: res.runs ?? [], total: res.total ?? 0 };
+    return withOfflineFallback(
+        async () => {
+            const res = await request<{ runs: Run[]; total: number }>("GET", "/api/v1/runs", undefined, filter as Record<string, string | number | boolean | undefined>);
+            return { runs: res.runs ?? [], total: res.total ?? 0 };
+        },
+        mockRuns(filter),
+    );
 }
 
 export async function fetchRun(id: string): Promise<Run> {
@@ -184,8 +220,13 @@ export async function resumeRun(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function fetchRunResults(runId: string, params?: { limit?: number; offset?: number; module_id?: string; test_id?: string }): Promise<PaginatedResults> {
-    const res = await request<{ results: TestResult[]; total: number }>("GET", `/api/v1/runs/${runId}/results`, undefined, params as Record<string, string | number | undefined>);
-    return { results: res.results ?? [], total: res.total ?? 0 };
+    return withOfflineFallback(
+        async () => {
+            const res = await request<{ results: TestResult[]; total: number }>("GET", `/api/v1/runs/${runId}/results`, undefined, params as Record<string, string | number | undefined>);
+            return { results: res.results ?? [], total: res.total ?? 0 };
+        },
+        MOCK_PAGINATED_RESULTS,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -202,8 +243,13 @@ export interface LogFilter {
 }
 
 export async function fetchRunLogs(runId: string, filter: LogFilter = {}): Promise<LogEntry[]> {
-    const res = await request<{ logs: LogEntry[]; total: number }>("GET", `/api/v1/runs/${runId}/logs`, undefined, filter as Record<string, string | number | undefined>);
-    return res.logs ?? [];
+    return withOfflineFallback(
+        async () => {
+            const res = await request<{ logs: LogEntry[]; total: number }>("GET", `/api/v1/runs/${runId}/logs`, undefined, filter as Record<string, string | number | undefined>);
+            return res.logs ?? [];
+        },
+        MOCK_LOGS.filter((l) => l.run_id === runId),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -251,8 +297,13 @@ export interface ModuleInfo {
 }
 
 export async function fetchModules(): Promise<ModuleInfo[]> {
-    const res = await request<{ modules: ModuleInfo[] }>("GET", "/api/v1/modules");
-    return res.modules ?? [];
+    return withOfflineFallback(
+        async () => {
+            const res = await request<{ modules: ModuleInfo[] }>("GET", "/api/v1/modules");
+            return res.modules ?? [];
+        },
+        MOCK_MODULES,
+    );
 }
 
 export async function fetchModule(id: string): Promise<ModuleInfo> {
@@ -427,13 +478,23 @@ export async function instantiateTemplate(id: string): Promise<{ config_json: st
 // ---------------------------------------------------------------------------
 
 export async function fetchGlobalLogs(filter: import("./client").LogFilter & { run_id?: string } = {}): Promise<import("./types").LogEntry[]> {
-    const res = await request<{ logs: import("./types").LogEntry[] }>("GET", "/api/v1/logs", undefined, filter as Record<string, string>);
-    return res.logs ?? [];
+    return withOfflineFallback(
+        async () => {
+            const res = await request<{ logs: import("./types").LogEntry[] }>("GET", "/api/v1/logs", undefined, filter as Record<string, string>);
+            return res.logs ?? [];
+        },
+        filter.run_id ? MOCK_LOGS.filter((l) => l.run_id === filter.run_id) : MOCK_LOGS,
+    );
 }
 
 export async function searchLogs(q: string, params: { limit?: number; offset?: number; run_id?: string; source?: string; level?: string } = {}): Promise<import("./types").LogEntry[]> {
-    const res = await request<{ logs: import("./types").LogEntry[] }>("GET", "/api/v1/logs/search", undefined, { q, ...params } as Record<string, string | number>);
-    return res.logs ?? [];
+    return withOfflineFallback(
+        async () => {
+            const res = await request<{ logs: import("./types").LogEntry[] }>("GET", "/api/v1/logs/search", undefined, { q, ...params } as Record<string, string | number>);
+            return res.logs ?? [];
+        },
+        MOCK_LOGS.filter((l) => l.message.toLowerCase().includes(q.toLowerCase())),
+    );
 }
 
 export interface LogBookmark {

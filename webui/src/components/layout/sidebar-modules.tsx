@@ -112,8 +112,8 @@ function ActiveRunCard() {
     : 0;
   const elapsedStr =
     elapsed > 3600 ? `${Math.floor(elapsed / 3600)}h ${Math.floor((elapsed % 3600) / 60)}m`
-    : elapsed > 60  ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`
-    : `${elapsed}s`;
+      : elapsed > 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`
+        : `${elapsed}s`;
 
   return (
     <div className="mx-2 mb-2 rounded-md border border-status-running/30 bg-status-running-bg p-3 space-y-2">
@@ -264,11 +264,9 @@ function SidebarBody() {
 
 export function SidebarModules() {
   return (
-    <SidebarProvider defaultOpen style={{ "--sidebar-width": "16rem" } as React.CSSProperties}>
-      <Sidebar variant="sidebar" collapsible="icon" className="border-r border-border/60">
-        <SidebarBody />
-        <SidebarRail />
-      </Sidebar>
-    </SidebarProvider>
+    <Sidebar variant="sidebar" collapsible="icon" className="border-r border-border/60">
+      <SidebarBody />
+      <SidebarRail />
+    </Sidebar>
   );
 }
