@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { use } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { MODULE_CATALOG } from "@/proto/module-catalog";
 import { getModuleLabel, cn } from "@/lib/utils";
 import { useModuleResults, useIsSimulated } from "@/data";
@@ -17,14 +17,13 @@ import { ResultTable } from "@/components/results/result-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell,
+  ResponsiveContainer, ReferenceLine, BarChart, Bar,
 } from "recharts";
 import {
   ArrowLeft, AlertCircle, TrendingUp, BarChart2, Grid,
@@ -40,23 +39,23 @@ import { pageVariants } from "@/components/motion/presets";
 function lastDotState(results: TestResult[]): LiveDotState {
   if (!results.length) return "idle";
   const last = results[results.length - 1];
-  const s = last.status as Status;
-  if (s === "pass") return "live";
-  if (s === "fail" || s === "error") return "error";
+  const s: string = last.status;
+  if (s === "PASS") return "pass";
+  if (s === "FAIL" || s === "ERROR") return "fail";
   return "idle";
 }
 
 // ─── Sub-tabs ─────────────────────────────────────────────────────────────────
 
 function OverviewTab({ results, latestResult }: { results: TestResult[]; latestResult: TestResult | undefined }) {
-  const keys = latestResult ? numericKeys(latestResult) : [];
+  const keys = numericKeys(results, "metrics");
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <SectionCard title="Last Result">
         {latestResult ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <StatusBadge status={latestResult.status as Status} />
+              <StatusBadge status={latestResult.status} />
               <span className="text-xs text-muted-foreground font-mono">{latestResult.test_id}</span>
             </div>
             {latestResult.error_message && (
@@ -110,11 +109,11 @@ function HistoryTab({ results }: { results: TestResult[] }) {
 }
 
 function TrendTab({ results }: { results: TestResult[] }) {
-  const keys = React.useMemo(() => (results.length ? numericKeys(results[0]) : []), [results]);
+  const keys = React.useMemo(() => numericKeys(results, "metrics"), [results]);
   const [metricKey, setMetricKey] = React.useState(() => keys[0] ?? "");
   React.useEffect(() => { if (!metricKey && keys[0]) setMetricKey(keys[0]); }, [keys, metricKey]);
 
-  const series = React.useMemo(() => extractNumericSeries(results, metricKey), [results, metricKey]);
+  const series = React.useMemo(() => extractNumericSeries(results, "metrics", metricKey).map((p, i) => ({ ...p, index: i })), [results, metricKey]);
   const values = series.map((p) => p.value);
   const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
 
@@ -144,12 +143,12 @@ function TrendTab({ results }: { results: TestResult[] }) {
 }
 
 function DistributionTab({ results }: { results: TestResult[] }) {
-  const keys = React.useMemo(() => (results.length ? numericKeys(results[0]) : []), [results]);
+  const keys = React.useMemo(() => numericKeys(results, "metrics"), [results]);
   const [metricKey, setMetricKey] = React.useState(() => keys[0] ?? "");
   React.useEffect(() => { if (!metricKey && keys[0]) setMetricKey(keys[0]); }, [keys, metricKey]);
 
   const histData = React.useMemo(() => {
-    const series = extractNumericSeries(results, metricKey).map((p) => p.value);
+    const series = extractNumericSeries(results, "metrics", metricKey).map((p) => p.value);
     if (!series.length) return [];
     const min = Math.min(...series), max = Math.max(...series);
     const bins = 20;
@@ -165,7 +164,7 @@ function DistributionTab({ results }: { results: TestResult[] }) {
     return buckets;
   }, [results, metricKey]);
 
-  const values = extractNumericSeries(results, metricKey).map((p) => p.value);
+  const values = extractNumericSeries(results, "metrics", metricKey).map((p) => p.value);
   const mean = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
   const variance = values.length ? values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length : 0;
 
@@ -205,8 +204,8 @@ function HeatmapTab({ results }: { results: TestResult[] }) {
   const testIds = React.useMemo(() => Array.from(new Set(results.map((r) => r.test_id))).slice(0, 30), [results]);
 
   const cell = React.useMemo(() => {
-    const map = new Map<string, string>();
-    results.forEach((r) => map.set(`${r.run_id}__${r.test_id}`, r.status));
+    const map: Record<string, string> = {};
+    results.forEach((r) => { map[`${r.run_id}__${r.test_id}`] = r.status; });
     return map;
   }, [results]);
 
@@ -235,7 +234,7 @@ function HeatmapTab({ results }: { results: TestResult[] }) {
               <tr key={t}>
                 <td className="text-muted-foreground pr-2 py-0.5 text-[9px] whitespace-nowrap">{t}</td>
                 {runIds.map((r) => {
-                  const s = cell.get(`${r}__${t}`);
+                  const s = cell[`${r}__${t}`];
                   return <td key={r} className={cn("h-4 w-4 rounded-sm", color(s))} title={`${t}: ${s ?? "—"}`} />;
                 })}
               </tr>
@@ -248,11 +247,14 @@ function HeatmapTab({ results }: { results: TestResult[] }) {
 }
 
 function ThresholdTab({ results }: { results: TestResult[] }) {
-  const keys = React.useMemo(() => (results.length ? numericKeys(results[0]) : []), [results]);
+  const keys = React.useMemo(() => numericKeys(results, "metrics"), [results]);
   const [thresholds, setThresholds] = React.useState<Record<string, { min: string; max: string }>>({});
 
   const setThreshold = (k: string, field: "min" | "max", v: string) => {
-    setThresholds((prev) => ({ ...prev, [k]: { ...{ min: "", max: "", ...prev[k] }, [field]: v } }));
+    setThresholds((prev) => {
+      const existing = prev[k] ?? { min: "", max: "" };
+      return { ...prev, [k]: { ...existing, [field]: v } };
+    });
   };
 
   if (!keys.length) return <p className="text-sm text-muted-foreground">No numeric metrics available.</p>;
@@ -332,7 +334,7 @@ function RawTab({ results }: { results: TestResult[] }) {
   );
 }
 
-function SimulateTab({ results, latestResult, moduleId }: { results: TestResult[]; latestResult: TestResult | undefined; moduleId: string }) {
+function SimulateTab({ moduleId }: { moduleId: string }) {
   const [pinStatus, setPinStatus] = React.useState("pass");
   const [injectFault, setInjectFault] = React.useState(false);
 
@@ -387,7 +389,7 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
   const mod = MODULE_CATALOG[moduleId];
   const label = mod?.displayName ?? getModuleLabel(moduleId);
   const dotState = lastDotState(results);
-  const keys = latestResult ? numericKeys(latestResult) : [];
+  const keys = numericKeys(results, "metrics");
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-5">
@@ -409,7 +411,7 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
         </div>
         <div className="ml-auto flex items-center gap-2">
           <LiveDot state={dotState} />
-          {latestResult && <StatusBadge status={latestResult.status as Status} />}
+          {latestResult && <StatusBadge status={latestResult.status} />}
         </div>
       </div>
 
@@ -417,7 +419,7 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
       {results.length > 0 && keys.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {keys.slice(0, 4).map((k) => {
-            const series = extractNumericSeries(results, k);
+            const series = extractNumericSeries(results, "metrics", k);
             const vals = series.map((p) => p.value);
             const last = vals[vals.length - 1];
             return (
@@ -484,7 +486,7 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
         </TabsContent>
         {isSimMode && (
           <TabsContent value="simulate" className="mt-4">
-            <SimulateTab results={results} latestResult={latestResult} moduleId={moduleId} />
+            <SimulateTab moduleId={moduleId} />
           </TabsContent>
         )}
       </Tabs>

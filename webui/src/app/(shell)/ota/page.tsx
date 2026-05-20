@@ -3,7 +3,6 @@ import * as React from "react";
 import { motion } from "motion/react";
 import { useOtaList, useTriggerUpgrade, useRollbackUpgrade } from "@/data";
 import { SectionCard } from "@/components/primitives/section-card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
@@ -19,7 +18,7 @@ import { cn } from "@/lib/utils";
 import type { OtaUpgrade } from "@/lib/api/types";
 import {
   Upload, CheckCircle2, XCircle, RotateCcw, Package, Shield, Hash, FileJson,
-  RefreshCw, AlertTriangle, ChevronRight, HardDrive,
+  ChevronRight, HardDrive,
 } from "lucide-react";
 import { toast } from "sonner";
 

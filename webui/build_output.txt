@@ -1,0 +1,40 @@
+
+> webui@0.1.0 prebuild
+> npx ts-node --esm scripts/generate-from-protos.ts
+
+▶ generate-from-protos.ts
+  Parsed 51 modules from modules.yaml
+  ✓ src/proto/generated/common.ts
+  ✓ src/proto/generated/modules/index.ts
+  ✓ src/proto/module-catalog.ts
+  protoc found at: /usr/bin/protoc
+  ✓ Full wire types generated via protoc
+✓ generate-from-protos done
+(node:1377312) [DEP0180] DeprecationWarning: fs.Stats constructor is deprecated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:1377312) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/data/workspace/project-managers/Acadia/Acadia-Dashboard/webui/scripts/generate-from-protos.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/data/workspace/project-managers/Acadia/Acadia-Dashboard/webui/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> webui@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+Failed to compile.
+
+./src/app/(shell)/modules/[moduleId]/page.tsx:419:7
+Type error: Type 'unknown' is not assignable to type 'ReactNode'.
+
+[0m [90m 417 |[39m[0m
+[0m [90m 418 |[39m       {[90m/* KPI strip */[39m}[0m
+[0m[31m[1m>[22m[39m[90m 419 |[39m       {results[33m.[39mlength [33m>[39m [35m0[39m [33m&&[39m keys[33m.[39mlength [33m>[39m [35m0[39m [33m&&[39m ([0m
+[0m [90m     |[39m       [31m[1m^[22m[39m[0m
+[0m [90m 420 |[39m         [33m<[39m[33mdiv[39m className[33m=[39m[32m"grid grid-cols-2 sm:grid-cols-4 gap-2"[39m[33m>[39m[0m
+[0m [90m 421 |[39m           {keys[33m.[39mslice([35m0[39m[33m,[39m [35m4[39m)[33m.[39mmap((k) [33m=>[39m {[0m
+[0m [90m 422 |[39m             [36mconst[39m series [33m=[39m extractNumericSeries(results[33m,[39m [32m"metrics"[39m[33m,[39m k)[33m;[39m[0m
+Next.js build worker exited with code: 1 and signal: null
