@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { login, isAuthenticated } from "@/lib/auth/session";
+import { useConnectionStore } from "@/state/connection";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,9 +20,10 @@ import { Cpu, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
     const router = useRouter();
+    const setSimulated = useConnectionStore((s) => s.setSimulated);
     const [username, setUsername] = useState("admin");
     const [password, setPassword] = useState("");
-    const [error, setError]     = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
     // Redirect if already logged in.
@@ -106,6 +108,17 @@ export default function LoginPage() {
                         </CardFooter>
                     </form>
                 </Card>
+
+                <div className="text-center">
+                    <button
+                        type="button"
+                        onClick={() => { setSimulated(); router.replace("/"); }}
+                        className="text-sm text-muted-foreground hover:text-primary transition-colors underline underline-offset-4"
+                    >
+                        Continue in simulated mode →
+                    </button>
+                    <p className="mt-1 text-xs text-muted-foreground/60">No server required · synthetic data · demo-safe</p>
+                </div>
             </div>
         </div>
     );

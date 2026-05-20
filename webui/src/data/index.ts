@@ -281,9 +281,9 @@ export function useRunCompare(runAId: string, runBId: string) {
             for (const testId of allTestIds) {
                 const a = aList.find((r) => r.testId === testId);
                 const b = bList.find((r) => r.testId === testId);
-                const statusA = a ? (statusToString(a.status) as Status) : null;
-                const statusB = b ? (statusToString(b.status) as Status) : null;
-                const cat: CompareCategory = !a ? "added" : !b ? "removed" : statusA === statusB ? "same" : "regression";
+                const statusA = a ? (statusToString(a.output?.status ?? 0) as Status) : null;
+                const statusB = b ? (statusToString(b.output?.status ?? 0) as Status) : null;
+                const cat: CompareCategory = !a ? "appeared" : !b ? "disappeared" : statusA === statusB ? "unchanged" : "regressed";
                 rows.push({ module_id: moduleId, test_id: testId, name: testId, status_a: statusA, status_b: statusB, severity_a: null, severity_b: null, category: cat, metrics_drift: {} });
             }
         }
