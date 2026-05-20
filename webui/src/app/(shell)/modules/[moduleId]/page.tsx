@@ -439,7 +439,7 @@ export default function ModuleDetailPage({ params }: { params: Promise<{ moduleI
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
         </div>
       )}
-      {error && (
+      {!!error && (
         <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" />
           Failed to load module results.

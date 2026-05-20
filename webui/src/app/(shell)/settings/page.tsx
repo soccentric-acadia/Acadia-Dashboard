@@ -21,7 +21,6 @@ import {
   useConnectionStore, useIsSimulated,
 } from "@/data";
 import { toast } from "sonner";
-import type { CreateAlertInput } from "@/lib/api/client";
 
 export default function SettingsPage() {
   const { board } = useBoard();
@@ -46,7 +45,7 @@ export default function SettingsPage() {
   const { data: retention } = useRetentionSettings();
   const updateRetention = useUpdateRetentionSettings();
   const [retentionDays, setRetentionDays] = React.useState<number>(90);
-  React.useEffect(() => { if (retention?.days) setRetentionDays(retention.days); }, [retention]);
+  React.useEffect(() => { if (retention?.retention_days) setRetentionDays(retention.retention_days); }, [retention]);
 
   // Board
   const updateBoard = useUpdateBoard();
@@ -94,7 +93,7 @@ export default function SettingsPage() {
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="flex justify-between gap-2 rounded bg-muted/30 px-2 py-1"><span className="text-muted-foreground">Board ID</span><span className="font-mono">{board?.id ?? "—"}</span></div>
-                  <div className="flex justify-between gap-2 rounded bg-muted/30 px-2 py-1"><span className="text-muted-foreground">Type</span><span className="font-mono">{board?.board_type ?? "—"}</span></div>
+                  <div className="flex justify-between gap-2 rounded bg-muted/30 px-2 py-1"><span className="text-muted-foreground">Type</span><span className="font-mono">{board?.model ?? "—"}</span></div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Display name</Label>
@@ -195,9 +194,9 @@ export default function SettingsPage() {
                   {alertRules.length === 0 && <p className="text-xs text-muted-foreground">No alert rules configured.</p>}
                   {alertRules.map((rule) => (
                     <div key={rule.id} className="flex items-center gap-2 text-xs">
-                      <Switch checked={rule.enabled} onCheckedChange={(v) => updateAlert.mutate({ id: rule.id, enabled: v })} />
-                      <span className="font-medium">{rule.name}</span>
-                      <span className="text-muted-foreground font-mono">{rule.field} {rule.operator} {rule.threshold}</span>
+                      <Switch checked={rule.enabled} onCheckedChange={(v) => updateAlert.mutate({ id: rule.id, input: { enabled: v } })} />
+                      <span className="font-medium">{rule.module_id}</span>
+                      <span className="text-muted-foreground font-mono">{rule.field_path} {rule.operator} {rule.threshold}</span>
                       <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto" onClick={() => deleteAlert.mutate(rule.id)}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -218,8 +217,8 @@ export default function SettingsPage() {
                   <Button size="sm" variant="outline" className="gap-1.5"
                     disabled={!newAlertName || !newAlertField || !newAlertValue}
                     onClick={() => createAlert.mutate({
-                      name: newAlertName, field: newAlertField, operator: newAlertOp, threshold: parseFloat(newAlertValue), enabled: true,
-                    } as CreateAlertInput, {
+                      module_id: newAlertName, field_path: newAlertField, operator: newAlertOp, threshold: parseFloat(newAlertValue), severity: "warning", enabled: true,
+                    }, {
                       onSuccess: () => { toast.success("Alert rule created"); setNewAlertName(""); setNewAlertField(""); setNewAlertValue(""); },
                     })}>
                     <Plus className="h-3.5 w-3.5" /> Add Rule
@@ -237,7 +236,7 @@ export default function SettingsPage() {
                   <Label className="text-xs text-muted-foreground shrink-0">Retain results for</Label>
                   <Input type="number" min={1} max={3650} value={retentionDays} onChange={(e) => setRetentionDays(parseInt(e.target.value) || 90)} className="h-7 w-20 font-mono text-xs" />
                   <span className="text-xs text-muted-foreground">days</span>
-                  <Button size="sm" variant="outline" onClick={() => updateRetention.mutate({ days: retentionDays }, { onSuccess: () => toast.success("Retention updated") })}>Save</Button>
+                  <Button size="sm" variant="outline" onClick={() => updateRetention.mutate({ retention_days: retentionDays }, { onSuccess: () => toast.success("Retention updated") })}>Save</Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Results older than this threshold are automatically purged from the board database.</p>
               </div>

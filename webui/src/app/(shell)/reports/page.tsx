@@ -14,7 +14,8 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { pageVariants } from "@/components/motion/presets";
 import { FileText, Download, Clock, CalendarClock, FileDown, Layers, Table2 } from "lucide-react";
 import { toast } from "sonner";
-import type { Run, Template, Schedule, Status } from "@/lib/api/types";
+import type { Run, Status } from "@/lib/api/types";
+import type { Template, Schedule } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 const FORMAT_OPTIONS = [
@@ -25,7 +26,7 @@ const FORMAT_OPTIONS = [
 
 function GenerateTab() {
   const { data: runsData, isLoading } = useRuns() as { data: { runs: Run[] } | undefined; isLoading: boolean };
-  const runs = (runsData?.runs ?? []).filter((r) => r.status === "completed" || r.status === "pass");
+  const runs = (runsData?.runs ?? []).filter((r) => r.status === "completed");
   const [selectedRun, setSelectedRun] = React.useState("");
   const [format, setFormat] = React.useState("pdf");
   const [generating, setGenerating] = React.useState(false);
