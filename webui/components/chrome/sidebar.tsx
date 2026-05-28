@@ -1,6 +1,6 @@
 "use client";
 
-import clsx from "clsx";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
@@ -84,13 +84,13 @@ export function Sidebar({
 
   return (
     <aside
-      className={clsx(
-        "sticky top-16 h-[calc(100vh-4rem)] border-r border-white/40 bg-white/55 backdrop-blur-xl transition-[width] dark:border-white/10 dark:bg-zinc-950/45",
-        collapsed ? "w-[76px]" : "w-[300px]",
+      className={cn(
+        "sticky top-14 h-[calc(100vh-3.5rem)] border-r border-border bg-background transition-[width]",
+        collapsed ? "w-[60px]" : "w-[280px]",
       )}
     >
       <div className="flex h-full flex-col">
-        <div className="border-b border-white/40 p-3 dark:border-white/10">
+        <div className="border-b border-border p-3">
           <div className="flex items-center justify-between gap-2">
             {!collapsed && (
               <input
@@ -98,16 +98,16 @@ export function Sidebar({
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search modules"
-                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm outline-none ring-sky-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900"
+                className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             )}
             <button
               type="button"
               onClick={() => setCollapsed(!collapsed)}
-              className="rounded-lg border border-zinc-300 p-2 dark:border-zinc-700"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               aria-label="Toggle sidebar"
             >
-              {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+              {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
             </button>
           </div>
         </div>
@@ -118,11 +118,11 @@ export function Sidebar({
             onClick={(event) => {
               if (locked) event.preventDefault();
             }}
-            className={clsx(
-              "mb-2 flex items-center gap-2 rounded-lg px-2 py-2 text-sm",
+            className={cn(
+              "mb-2 flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors",
               pathname === "/dashboard"
-                ? "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
-                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/80",
+                ? "bg-accent text-accent-foreground font-medium"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
               locked && "cursor-not-allowed opacity-60",
             )}
           >
@@ -131,8 +131,8 @@ export function Sidebar({
           </Link>
 
           {grouped.map((group) => (
-            <details key={group.category} open className="mb-2 rounded-xl border border-transparent bg-white/40 p-1 dark:bg-zinc-900/30">
-              <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
+            <details key={group.category} open className="mb-1">
+              <summary className="flex cursor-pointer list-none items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground">
                 {!collapsed && group.category}
                 <ChevronDown size={14} />
               </summary>
@@ -145,11 +145,11 @@ export function Sidebar({
                     <Link
                       key={module.id}
                       href={locked ? pathname : href}
-                      className={clsx(
-                        "flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors",
+                      className={cn(
+                        "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                         active
-                          ? "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
-                          : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/80",
+                          ? "bg-accent text-accent-foreground font-medium"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                         locked && "cursor-not-allowed opacity-60",
                       )}
                       onClick={(event) => {
@@ -170,11 +170,11 @@ export function Sidebar({
             onClick={(event) => {
               if (locked) event.preventDefault();
             }}
-            className={clsx(
-              "mt-2 flex items-center gap-2 rounded-lg px-2 py-2 text-sm",
+            className={cn(
+              "mt-1 flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors",
               pathname === "/logs"
-                ? "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
-                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/80",
+                ? "bg-accent text-accent-foreground font-medium"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
             )}
           >
             <FileText size={16} />
@@ -182,17 +182,17 @@ export function Sidebar({
           </Link>
         </div>
 
-        <div className="border-t border-white/40 p-2 dark:border-white/10">
+        <div className="border-t border-border p-2">
           <Link
             href={locked ? pathname : "/settings/general"}
             onClick={(event) => {
               if (locked) event.preventDefault();
             }}
-            className={clsx(
-              "flex items-center gap-2 rounded-lg px-2 py-2 text-sm",
+            className={cn(
+              "flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors",
               pathname.startsWith("/settings")
-                ? "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100"
-                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/80",
+                ? "bg-accent text-accent-foreground font-medium"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
             )}
           >
             <Settings size={16} />

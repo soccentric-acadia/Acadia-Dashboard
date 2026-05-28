@@ -140,7 +140,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [lockNavigation, pathname, router]);
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_15%_20%,#dbeafe_0%,transparent_32%),radial-gradient(circle_at_92%_0%,#fef3c7_0%,transparent_22%),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] text-zinc-900 dark:bg-[radial-gradient(circle_at_15%_20%,#1e293b_0%,transparent_32%),radial-gradient(circle_at_92%_0%,#111827_0%,transparent_22%),linear-gradient(180deg,#09090b_0%,#111827_100%)] dark:text-zinc-100">
+    <div className="min-h-screen bg-background text-foreground">
       <TopBar
         mode={mode}
         setMode={(nextMode) => {
@@ -152,7 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
 
       {runError && (
-        <div className="sticky top-16 z-20 border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">
+        <div className="sticky top-14 z-20 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {runError}
         </div>
       )}
@@ -167,7 +167,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onRegisterSearchFocus={registerModuleSearchFocus}
         />
 
-        <main className="min-h-[calc(100vh-4rem)] flex-1 overflow-auto p-5">{children}</main>
+        <main className="min-h-[calc(100vh-3.5rem)] flex-1 overflow-auto p-5">{children}</main>
       </div>
 
       <HelpShortcutsDialog open={showHelp} onClose={() => setShowHelp(false)} />

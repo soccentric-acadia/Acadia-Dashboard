@@ -1,6 +1,6 @@
 "use client";
 
-import clsx from "clsx";
+import { cn } from "@/lib/utils";
 
 export function StartStopButton({
   isRunning,
@@ -18,18 +18,18 @@ export function StartStopButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={clsx(
-        "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold shadow-sm transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60",
+      className={cn(
+        "inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
         isRunning
-          ? "bg-rose-600 text-white hover:bg-rose-500"
-          : "bg-emerald-600 text-white hover:bg-emerald-500",
+          ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          : "bg-success text-success-foreground hover:bg-success/90",
       )}
     >
       <span>{isRunning ? "Stop" : "Start"}</span>
       {isRunning && (
         <>
-          <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
-          <span>Running · {elapsedLabel}</span>
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+          <span>{elapsedLabel}</span>
         </>
       )}
     </button>

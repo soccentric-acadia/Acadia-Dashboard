@@ -1,17 +1,17 @@
 "use client";
 
-import clsx from "clsx";
+import { cn } from "@/lib/utils";
 
 export function ConnectionIndicator({ online }: { online: boolean }) {
   return (
-    <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
       <span
-        className={clsx(
-          "h-2.5 w-2.5 rounded-full",
-          online ? "bg-emerald-500" : "bg-zinc-400 dark:bg-zinc-500",
+        className={cn(
+          "h-2 w-2 rounded-full",
+          online ? "bg-success" : "bg-muted-foreground/50",
         )}
       />
-      {online ? "Online" : "Offline"}
+      <span className={online ? "text-success" : ""}>{online ? "Online" : "Offline"}</span>
     </div>
   );
 }

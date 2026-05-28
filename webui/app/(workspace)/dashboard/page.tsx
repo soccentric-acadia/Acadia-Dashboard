@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getGlobalLogs, getHealth, getModules, getRuns, getTarget } from "@/lib/api";
 import { modulesForOfflineDisplay, writeCachedModules } from "@/lib/modules/catalog";
 
@@ -70,30 +71,28 @@ export default function DashboardPage() {
                         <CardDescription>{liveModules.isError ? "Showing cached or baseline modules while the server is unreachable." : "Server-discovered modules with API metadata."}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-                            <table className="min-w-full text-sm">
-                                <thead className="bg-zinc-100 text-left dark:bg-zinc-800">
-                                    <tr>
-                                        <th className="px-3 py-2">Module</th>
-                                        <th className="px-3 py-2">Category</th>
-                                        <th className="px-3 py-2">Version</th>
-                                        <th className="px-3 py-2">Config type</th>
-                                        <th className="px-3 py-2">Result type</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {modules.map((module) => (
-                                        <tr key={module.id} className="border-t border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/60">
-                                            <td className="px-3 py-2"><Link href={`/modules/${module.id}`} className="font-semibold text-sky-700 hover:underline dark:text-sky-300">{module.name || module.id}</Link><div className="text-xs text-zinc-500">{module.id}</div></td>
-                                            <td className="px-3 py-2"><Badge variant="outline">{module.category || "Module"}</Badge></td>
-                                            <td className="px-3 py-2">{module.version || "n/a"}</td>
-                                            <td className="max-w-[220px] truncate px-3 py-2 text-xs text-zinc-500">{module.config_type_url || "Not reported"}</td>
-                                            <td className="max-w-[220px] truncate px-3 py-2 text-xs text-zinc-500">{module.result_type_url || "Not reported"}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Module</TableHead>
+                                    <TableHead>Category</TableHead>
+                                    <TableHead>Version</TableHead>
+                                    <TableHead>Config type</TableHead>
+                                    <TableHead>Result type</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {modules.map((module) => (
+                                    <TableRow key={module.id}>
+                                        <TableCell><Link href={`/modules/${module.id}`} className="font-semibold text-primary hover:underline">{module.name || module.id}</Link><div className="text-xs text-muted-foreground">{module.id}</div></TableCell>
+                                        <TableCell><Badge variant="outline">{module.category || "Module"}</Badge></TableCell>
+                                        <TableCell>{module.version || "n/a"}</TableCell>
+                                        <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">{module.config_type_url || "Not reported"}</TableCell>
+                                        <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">{module.result_type_url || "Not reported"}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </CardContent>
                 </Card>
 
@@ -104,10 +103,10 @@ export default function DashboardPage() {
                             <CardDescription>{target.data?.hostname ?? "No connected target identity reported."}</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3 text-sm">
-                            <div className="flex justify-between gap-3"><span className="text-zinc-500">Model</span><span className="font-medium">{target.data?.model ?? "Unknown"}</span></div>
-                            <div className="flex justify-between gap-3"><span className="text-zinc-500">OS</span><span className="font-medium">{target.data?.os_version ?? "Unknown"}</span></div>
-                            <div className="flex justify-between gap-3"><span className="text-zinc-500">HAL</span><span className="font-medium">{target.data?.hal_version ?? "Unknown"}</span></div>
-                            <div className="flex justify-between gap-3"><span className="text-zinc-500">Client</span><span className="font-medium">{target.data?.client_version ?? "Unknown"}</span></div>
+                            <div className="flex justify-between gap-3"><span className="text-muted-foreground">Model</span><span className="font-medium">{target.data?.model ?? "Unknown"}</span></div>
+                            <div className="flex justify-between gap-3"><span className="text-muted-foreground">OS</span><span className="font-medium">{target.data?.os_version ?? "Unknown"}</span></div>
+                            <div className="flex justify-between gap-3"><span className="text-muted-foreground">HAL</span><span className="font-medium">{target.data?.hal_version ?? "Unknown"}</span></div>
+                            <div className="flex justify-between gap-3"><span className="text-muted-foreground">Client</span><span className="font-medium">{target.data?.client_version ?? "Unknown"}</span></div>
                         </CardContent>
                     </Card>
 
@@ -117,9 +116,9 @@ export default function DashboardPage() {
                             <CardDescription>{latestRun?.id ?? "No run history loaded."}</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3 text-sm">
-                            <div className="flex items-center justify-between gap-3"><span className="text-zinc-500">Status</span><Badge variant={statusVariant(latestRun?.status)}>{latestRun?.status ?? "None"}</Badge></div>
-                            <div className="flex justify-between gap-3"><span className="text-zinc-500">Mode</span><span className="font-medium">{latestRun?.mode ?? "n/a"}</span></div>
-                            <div className="flex justify-between gap-3"><span className="text-zinc-500">Created</span><span className="font-medium">{latestRun?.created_at ? new Date(latestRun.created_at).toLocaleString() : "n/a"}</span></div>
+                            <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Status</span><Badge variant={statusVariant(latestRun?.status)}>{latestRun?.status ?? "None"}</Badge></div>
+                            <div className="flex justify-between gap-3"><span className="text-muted-foreground">Mode</span><span className="font-medium">{latestRun?.mode ?? "n/a"}</span></div>
+                            <div className="flex justify-between gap-3"><span className="text-muted-foreground">Created</span><span className="font-medium">{latestRun?.created_at ? new Date(latestRun.created_at).toLocaleString() : "n/a"}</span></div>
                         </CardContent>
                     </Card>
 
@@ -130,12 +129,12 @@ export default function DashboardPage() {
                         <CardContent className="space-y-2">
                             {(logs.data?.logs ?? []).slice(0, 5).map((entry) => (
                                 <div key={entry.id || `${entry.timestamp}-${entry.message}`} className="text-sm">
-                                    <div className="flex items-center gap-2"><Badge variant={statusVariant(entry.level || entry.severity)}>{entry.level || entry.severity || "info"}</Badge><span className="text-xs text-zinc-500">{entry.source || "system"}</span></div>
-                                    <p className="mt-1 line-clamp-2 text-zinc-700 dark:text-zinc-200">{entry.message}</p>
+                                    <div className="flex items-center gap-2"><Badge variant={statusVariant(entry.level || entry.severity)}>{entry.level || entry.severity || "info"}</Badge><span className="text-xs text-muted-foreground">{entry.source || "system"}</span></div>
+                                    <p className="mt-1 line-clamp-2 text-foreground">{entry.message}</p>
                                     <Separator className="mt-2" />
                                 </div>
                             ))}
-                            {(logs.data?.logs ?? []).length === 0 && <div className="flex items-center gap-2 rounded-xl bg-zinc-100 p-3 text-sm text-zinc-500 dark:bg-zinc-800"><AlertTriangle size={16} /> No logs available.</div>}
+                            {(logs.data?.logs ?? []).length === 0 && <div className="flex items-center gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground"><AlertTriangle size={16} /> No logs available.</div>}
                         </CardContent>
                     </Card>
                 </div>

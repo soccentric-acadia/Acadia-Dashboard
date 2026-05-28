@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import clsx from "clsx";
-import { ChevronDown, ChevronRight, Settings2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ChevronDown, Settings2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
@@ -286,13 +286,13 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                   {activeEnabledTests.length}/{moduleTests.length} tests enabled
                 </Badge>
               </div>
-              <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              <h1 className="text-3xl font-bold tracking-tight">
                 {module.name || module.id}
               </h1>
-              <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
                 {module.description || "No description was reported for this module."}
               </p>
-              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{runningStatus}</p>
+              <p className="mt-1 text-xs text-muted-foreground/70">{runningStatus}</p>
             </div>
 
             {/* Right: metadata tiles */}
@@ -303,10 +303,10 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                 { label: "Config type", value: module.config_type_url || "—", mono: true },
                 { label: "Result type", value: module.result_type_url || "—", mono: true },
               ].map(({ label, value, mono }) => (
-                <div key={label} className="rounded-xl bg-zinc-100 px-3 py-3 dark:bg-zinc-800">
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{label}</div>
+                <div key={label} className="rounded-lg bg-muted px-3 py-3">
+                  <div className="text-xs text-muted-foreground">{label}</div>
                   <div
-                    className={clsx(
+                    className={cn(
                       "mt-1 truncate text-xs font-semibold",
                       mono && "font-mono",
                     )}
@@ -344,11 +344,11 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                   key={m}
                   type="button"
                   onClick={() => setModeFilter(m)}
-                  className={clsx(
-                    "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                  className={cn(
+                    "rounded-md px-3 py-1 text-xs font-medium transition-colors",
                     modeFilter === m
-                      ? "bg-sky-500 text-white"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700",
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                   )}
                 >
                   {m === "all" ? "All modes" : modeLabel(m as ExecutionMode)}
@@ -361,15 +361,15 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
             <div className="overflow-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60">
-                    <th className="w-[40%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="w-[40%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Test
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Supported modes
                     </th>
                     <th className="w-10 px-2 py-3" />
-                    <th className="w-24 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    <th className="w-24 px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Enabled
                     </th>
                   </tr>
@@ -388,23 +388,23 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                         {/* ── Test row ── */}
                         <tr
                           key={test.id}
-                          className={clsx(
-                            "border-b border-zinc-100 dark:border-zinc-800",
+                          className={cn(
+                            "border-b border-border transition-colors",
                             modeCompatible
-                              ? "bg-white dark:bg-zinc-950/20"
-                              : "bg-zinc-50/60 opacity-60 dark:bg-zinc-900/30",
+                              ? "hover:bg-muted/50"
+                              : "opacity-50",
                           )}
                         >
                           {/* Name + description */}
                           <td className="px-4 py-3">
-                            <div className="font-semibold text-zinc-900 dark:text-zinc-100">
+                            <div className="font-semibold">
                               {test.name}
                             </div>
-                            <div className="mt-0.5 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                            <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
                               {test.description}
                             </div>
                             {!modeCompatible && (
-                              <span className="mt-1 inline-block text-xs text-amber-600 dark:text-amber-400">
+                              <span className="mt-1 inline-block text-xs text-warning">
                                 Not available in {modeLabel(mode)} mode
                               </span>
                             )}
@@ -431,11 +431,11 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                                 type="button"
                                 onClick={() => toggleExpand(test.id)}
                                 title="Configure test parameters"
-                                className={clsx(
-                                  "rounded-lg p-1.5 transition-colors",
+                                className={cn(
+                                  "rounded-md p-1.5 transition-colors",
                                   isExpanded
-                                    ? "bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300"
-                                    : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800",
+                                    ? "bg-accent text-accent-foreground"
+                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                                 )}
                               >
                                 <Settings2 size={15} />
@@ -446,7 +446,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                           {/* Enable/disable switch */}
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                              <span className="text-xs text-muted-foreground">
                                 {enabled ? "On" : "Off"}
                               </span>
                               <Switch
@@ -463,18 +463,18 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                         {isExpanded && hasFields && (
                           <tr
                             key={`${test.id}-config`}
-                            className="border-b border-sky-100 bg-sky-50/50 dark:border-sky-900/30 dark:bg-sky-950/10"
+                            className="border-b border-border bg-muted/30"
                           >
                             <td colSpan={4} className="px-6 pb-4 pt-3">
                               <div className="flex items-center gap-2 mb-3">
-                                <Settings2 size={13} className="text-sky-500" />
-                                <span className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-300">
+                                <Settings2 size={13} className="text-muted-foreground" />
+                                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                   Configuration — {test.name}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => toggleExpand(test.id)}
-                                  className="ml-auto text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                  className="ml-auto text-xs text-muted-foreground hover:text-foreground"
                                 >
                                   <ChevronDown size={14} />
                                 </button>
@@ -485,12 +485,12 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                                   return (
                                     <label
                                       key={field.key}
-                                      className="block text-xs font-medium text-zinc-600 dark:text-zinc-300"
+                                      className="block text-xs font-medium text-foreground"
                                     >
                                       <span className="mb-1 flex items-center justify-between gap-2">
                                         <span>{field.label}</span>
                                         {field.unit && (
-                                          <span className="text-zinc-400">{field.unit}</span>
+                                          <span className="text-muted-foreground">{field.unit}</span>
                                         )}
                                       </span>
                                       {field.type === "select" ? (
@@ -500,7 +500,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                                           onChange={(e) =>
                                             setFieldValue(test.id, field, e.target.value)
                                           }
-                                          className="h-9 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                                         >
                                           {(field.options ?? []).map((option) => (
                                             <option key={option} value={option}>
@@ -509,7 +509,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                                           ))}
                                         </select>
                                       ) : field.type === "boolean" ? (
-                                        <div className="flex h-9 items-center justify-between rounded-xl border border-zinc-300 bg-white px-3 dark:border-zinc-700 dark:bg-zinc-950">
+                                        <div className="flex h-9 items-center justify-between rounded-md border border-input bg-transparent px-3">
                                           <span>{value ? "Enabled" : "Disabled"}</span>
                                           <Switch
                                             checked={Boolean(value)}
@@ -549,7 +549,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
 
                   {filteredTests.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-zinc-500">
+                      <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
                         No tests available for this filter.
                       </td>
                     </tr>
@@ -563,14 +563,14 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
         {/* ── Results panel ────────────────────────────────────────────── */}
         <div className="flex flex-col gap-4">
           {reviewingRunId && (
-            <div className="flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-700 dark:bg-amber-950/30">
-              <span className="text-amber-800 dark:text-amber-200">
+            <div className="flex items-center justify-between rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
+              <span className="text-warning">
                 Reviewing run {reviewingRunId.slice(0, 8)}…
               </span>
               <button
                 type="button"
                 onClick={() => setReviewingRunId(null)}
-                className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700"
+                className="rounded-md bg-warning px-3 py-1 text-xs font-semibold text-warning-foreground hover:bg-warning/90"
               >
                 Return to live
               </button>
@@ -579,7 +579,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
 
           <Card className="flex flex-col gap-3 p-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+              <span className="text-sm font-semibold">
                 Results
               </span>
               <Badge variant={isRunning ? "warning" : "secondary"}>
@@ -589,7 +589,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
 
             {/* Chart (monitoring / long_run) */}
             {(mode === "monitoring" || mode === "long_run") && (
-              <div className="h-56 w-full rounded-xl border border-zinc-200 bg-white p-2 dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="h-56 w-full rounded-lg border border-border bg-background p-2">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData}>
@@ -608,7 +608,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="grid h-full place-items-center text-sm text-zinc-500">
+                  <div className="grid h-full place-items-center text-sm text-muted-foreground">
                     No numeric samples yet.
                   </div>
                 )}
@@ -618,18 +618,18 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
             {/* Single-shot big result */}
             {mode === "single_shot" && (
               <div
-                className={clsx(
-                  "rounded-xl border p-4 text-center",
+                className={cn(
+                  "rounded-lg border p-4 text-center",
                   latest?.status?.toLowerCase() === "pass"
-                    ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20"
-                    : "border-rose-400 bg-rose-50 dark:bg-rose-950/20",
+                    ? "border-success/50 bg-success/10"
+                    : "border-destructive/50 bg-destructive/10",
                 )}
               >
-                <div className="text-xs text-zinc-500">Most recent one-shot</div>
+                <div className="text-xs text-muted-foreground">Most recent one-shot</div>
                 <div className="mt-2 text-4xl font-bold">
                   {latest?.status ?? "No result"}
                 </div>
-                <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                <div className="mt-1 text-xs text-muted-foreground">
                   {latest
                     ? `${formatClock(latest.timestamp)} · ${latest.duration_ns} ns`
                     : "Waiting for run"}
@@ -638,9 +638,9 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
             )}
 
             {/* Live results mini-table */}
-            <div className="overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
+            <div className="overflow-auto rounded-lg border border-border">
               <table className="min-w-full text-xs">
-                <thead className="sticky top-0 bg-zinc-100 dark:bg-zinc-800">
+                <thead className="sticky top-0 bg-muted">
                   <tr>
                     <th className="px-2 py-2 text-left">Time</th>
                     <th className="px-2 py-2 text-left">Status</th>
@@ -652,7 +652,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                   {mergedResults.slice(0, 200).map((row) => (
                     <tr
                       key={row.id + String(row.sequence)}
-                      className="border-t border-zinc-200 dark:border-zinc-700"
+                      className="border-t border-border"
                     >
                       <td className="px-2 py-1.5">{formatClock(row.timestamp)}</td>
                       <td className="px-2 py-1.5">
@@ -676,7 +676,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                   ))}
                   {mergedResults.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-2 py-6 text-center text-zinc-500">
+                      <td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">
                         No results yet.
                       </td>
                     </tr>
@@ -698,22 +698,21 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
             <CardContent className="p-0">
               <div className="overflow-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+                  <thead className="bg-muted/50">
                     <tr>
-                      <th className="px-3 py-2 text-left font-semibold text-zinc-500">Run ID</th>
-                      <th className="px-3 py-2 text-left font-semibold text-zinc-500">Mode</th>
-                      <th className="px-3 py-2 text-left font-semibold text-zinc-500">Status</th>
-                      <th className="px-3 py-2 text-left font-semibold text-zinc-500">Created</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Run ID</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mode</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Status</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Created</th>
                     </tr>
                   </thead>
                   <tbody>
                     {moduleRuns.map((run: Run) => (
                       <tr
                         key={run.id}
-                        className={clsx(
-                          "cursor-pointer border-t border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/60",
-                          reviewingRunId === run.id &&
-                          "bg-amber-50 dark:bg-amber-950/20",
+                        className={cn(
+                          "cursor-pointer border-t border-border transition-colors hover:bg-muted/50",
+                          reviewingRunId === run.id && "bg-warning/10",
                         )}
                         onClick={() => setReviewingRunId(run.id)}
                       >
@@ -739,7 +738,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                     ))}
                     {moduleRuns.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-3 py-5 text-center text-zinc-500">
+                        <td colSpan={4} className="px-3 py-5 text-center text-muted-foreground">
                           No runs yet.
                         </td>
                       </tr>

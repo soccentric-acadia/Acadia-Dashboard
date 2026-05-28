@@ -4,11 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { getHealth, getModules, getRetentionSettings, getTarget, updateRetentionSettings } from "@/lib/api";
 import { useAppShell } from "@/state/app-shell-context";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
     return (
-        <div className="flex items-center justify-between gap-4 border-b border-zinc-200 px-4 py-3 last:border-b-0 dark:border-zinc-800">
-            <span className="text-sm text-zinc-600 dark:text-zinc-300">{label}</span>
+        <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 last:border-b-0">
+            <span className="text-sm text-muted-foreground">{label}</span>
             <span className="text-right text-sm font-medium">{value}</span>
         </div>
     );
@@ -16,10 +17,12 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <section>
-            <h2 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h2>
-            <div className="overflow-hidden rounded-2xl border border-white/50 bg-white/80 shadow-sm dark:border-white/10 dark:bg-zinc-900/60">{children}</div>
-        </section>
+        <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{title}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">{children}</CardContent>
+        </Card>
     );
 }
 
@@ -47,9 +50,9 @@ export default function GeneralSettingsPage() {
             </Group>
 
             <Group title="Preferences">
-                <div className="flex items-center justify-between gap-4 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-                    <span className="text-sm text-zinc-600 dark:text-zinc-300">Appearance</span>
-                    <select value={themeMode} onChange={(event) => setThemeMode(event.target.value as "system" | "light" | "dark")} className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950">
+                <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
+                    <span className="text-sm text-muted-foreground">Appearance</span>
+                    <select value={themeMode} onChange={(event) => setThemeMode(event.target.value as "system" | "light" | "dark")} className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                         <option value="system">System</option>
                         <option value="light">Light</option>
                         <option value="dark">Dark</option>
@@ -58,21 +61,21 @@ export default function GeneralSettingsPage() {
                 <Row label="Table density" value="Comfortable" />
                 <Row label="Log auto-scroll default" value="Enabled" />
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
-                    <span className="text-sm text-zinc-600 dark:text-zinc-300">Retention days</span>
+                    <span className="text-sm text-muted-foreground">Retention days</span>
                     <input
                         type="number"
                         min={1}
                         defaultValue={retention.data?.retention_days ?? 30}
                         onBlur={(event) => void updateRetentionSettings({ retention_days: Number(event.target.value) })}
-                        className="w-28 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-right text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                        className="w-28 h-9 rounded-md border border-input bg-transparent px-3 text-right text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
                 </div>
             </Group>
 
             <Group title="Operator">
-                <Row label="Name" value={<input className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950" aria-label="Operator name" />} />
-                <Row label="Email" value={<input type="email" className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950" aria-label="Operator email" />} />
-                <Row label="Role" value={<span className="inline-flex items-center gap-1 text-zinc-500">Unassigned <ChevronRight size={14} /></span>} />
+                <Row label="Name" value={<input className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator name" />} />
+                <Row label="Email" value={<input type="email" className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator email" />} />
+                <Row label="Role" value={<span className="inline-flex items-center gap-1 text-muted-foreground">Unassigned <ChevronRight size={14} /></span>} />
             </Group>
         </div>
     );

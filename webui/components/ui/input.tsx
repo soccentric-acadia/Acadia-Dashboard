@@ -1,11 +1,12 @@
-import clsx from "clsx";
 import type { InputHTMLAttributes } from "react";
+import { cn } from "@/lib/utils";
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, type, ...props }: InputHTMLAttributes<HTMLInputElement>) {
     return (
         <input
-            className={clsx(
-                "h-10 rounded-xl border border-zinc-300 bg-white px-3 text-sm shadow-sm outline-none ring-sky-400 transition focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950",
+            type={type}
+            className={cn(
+                "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
                 className,
             )}
             {...props}

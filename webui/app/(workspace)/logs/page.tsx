@@ -1,6 +1,5 @@
 "use client";
 
-import clsx from "clsx";
 import { Pause, Play } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -8,14 +7,17 @@ import { getGlobalLogs } from "@/lib/api";
 import { parseSsePayload, openSse } from "@/lib/sse";
 import type { LogEntry } from "@/lib/types/api";
 import { useAppShell } from "@/state/app-shell-context";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const levels = ["", "debug", "info", "warn", "error", "fatal"];
 
 function tone(level: string) {
     const normalized = level.toLowerCase();
-    if (normalized.includes("fatal") || normalized.includes("error")) return "text-rose-600 dark:text-rose-300";
-    if (normalized.includes("warn")) return "text-amber-600 dark:text-amber-300";
-    return "text-zinc-600 dark:text-zinc-300";
+    if (normalized.includes("fatal") || normalized.includes("error")) return "text-destructive";
+    if (normalized.includes("warn")) return "text-warning";
+    return "text-muted-foreground";
 }
 
 export default function LogsPage() {
@@ -68,42 +70,45 @@ export default function LogsPage() {
 
     return (
         <div className="space-y-4">
-            <section className="rounded-2xl border border-white/50 bg-white/75 p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900/55">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h1 className="text-2xl font-semibold">Logs</h1>
-                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Live tail plus server-side log history.</p>
+            <Card>
+                <CardHeader>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <CardTitle>Logs</CardTitle>
+                            <CardDescription className="mt-1">Live tail plus server-side log history.</CardDescription>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setAutoScroll((value) => !value)}>
+                            {autoScroll ? <Pause size={14} /> : <Play size={14} />}
+                            {autoScroll ? "Pause auto-scroll" : "Resume auto-scroll"}
+                        </Button>
                     </div>
-                    <button type="button" onClick={() => setAutoScroll((value) => !value)} className="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-                        {autoScroll ? <Pause size={16} /> : <Play size={16} />}
-                        {autoScroll ? "Pause auto-scroll" : "Resume auto-scroll"}
-                    </button>
-                </div>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid gap-3 md:grid-cols-[180px_180px_1fr]">
+                        <select value={source} onChange={(event) => setSource(event.target.value)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                            <option value="">All sources</option>
+                            {sources.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                        <select value={level} onChange={(event) => setLevel(event.target.value)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                            {levels.map((item) => <option key={item || "all"} value={item}>{item || "All severities"}</option>)}
+                        </select>
+                        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search log text" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                    </div>
+                </CardContent>
+            </Card>
 
-                <div className="mt-4 grid gap-3 md:grid-cols-[180px_180px_1fr]">
-                    <select value={source} onChange={(event) => setSource(event.target.value)} className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950">
-                        <option value="">All sources</option>
-                        {sources.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                    <select value={level} onChange={(event) => setLevel(event.target.value)} className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950">
-                        {levels.map((item) => <option key={item || "all"} value={item}>{item || "All severities"}</option>)}
-                    </select>
-                    <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search log text" className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
-                </div>
-            </section>
-
-            <section className="h-[calc(100vh-15rem)] overflow-auto rounded-2xl border border-zinc-200 bg-zinc-950 p-3 font-mono text-xs text-zinc-100 shadow-sm dark:border-white/10">
+            <div className="h-[calc(100vh-18rem)] overflow-auto rounded-xl border border-border bg-zinc-950 p-3 font-mono text-xs text-zinc-100">
                 {logs.map((entry) => (
                     <div key={entry.id || `${entry.timestamp}-${entry.message}`} className="grid grid-cols-[9rem_7rem_6rem_1fr] gap-3 border-b border-white/5 py-1">
                         <span className="text-zinc-500">{entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : "--:--:--"}</span>
-                        <span className="text-sky-300">{entry.source || "system"}</span>
-                        <span className={clsx("font-semibold", tone(entry.level || entry.severity))}>{entry.level || entry.severity || "info"}</span>
+                        <span className="text-sky-400">{entry.source || "system"}</span>
+                        <span className={cn("font-semibold", tone(entry.level || entry.severity))}>{entry.level || entry.severity || "info"}</span>
                         <span>{entry.message}</span>
                     </div>
                 ))}
                 {logs.length === 0 && <div className="grid h-full place-items-center text-zinc-500">No log entries match the current filters.</div>}
                 <div ref={bottomRef} />
-            </section>
+            </div>
         </div>
     );
 }

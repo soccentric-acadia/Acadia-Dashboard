@@ -7,6 +7,7 @@ import type { ExecutionMode } from "@/lib/types/api";
 import { ConnectionIndicator } from "@/components/chrome/connection-indicator";
 import { ModeSwitcher } from "@/components/chrome/mode-switcher";
 import { StartStopButton } from "@/components/chrome/start-stop-button";
+import { Separator } from "@/components/ui/separator";
 
 function formatElapsed(seconds: number): string {
   const minutes = Math.floor(seconds / 60)
@@ -47,15 +48,16 @@ export function TopBar({
   const elapsedLabel = runningSince ? formatElapsed((now - runningSince) / 1000) : "00:00";
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/35 bg-white/55 px-4 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/45">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-4">
-        <div className="font-semibold tracking-wide text-zinc-900 dark:text-zinc-100">Acadia IV&V</div>
-        <div className="h-6 w-px bg-zinc-300 dark:bg-zinc-600" />
+        <span className="text-sm font-semibold tracking-tight text-foreground">Acadia IV&amp;V</span>
+        <Separator orientation="vertical" className="h-5" />
         <ModeSwitcher mode={mode} onChange={setMode} disabled={isRunning} />
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <StartStopButton isRunning={isRunning} elapsedLabel={elapsedLabel} onClick={onStartStop} />
+        <Separator orientation="vertical" className="h-5" />
         <ConnectionIndicator online={!isError && data?.status === "ok"} />
       </div>
     </header>

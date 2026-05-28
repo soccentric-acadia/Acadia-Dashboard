@@ -1,26 +1,28 @@
-import clsx from "clsx";
+import { cva, type VariantProps } from "class-variance-authority";
 import type { HTMLAttributes } from "react";
+import { cn } from "@/lib/utils";
 
-type BadgeVariant = "default" | "secondary" | "success" | "warning" | "destructive" | "outline";
-
-const variantClasses: Record<BadgeVariant, string> = {
-    default: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
-    secondary: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",
-    success: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
-    warning: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-    destructive: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200",
-    outline: "border border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200",
-};
+const badgeVariants = cva(
+    "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+    {
+        variants: {
+            variant: {
+                default: "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+                secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                destructive: "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
+                outline: "text-foreground",
+                success: "border-transparent bg-success text-success-foreground shadow hover:bg-success/80",
+                warning: "border-transparent bg-warning text-warning-foreground shadow hover:bg-warning/80",
+            },
+        },
+        defaultVariants: { variant: "default" },
+    },
+);
 
 export function Badge({
     className,
-    variant = "default",
+    variant,
     ...props
-}: HTMLAttributes<HTMLSpanElement> & { variant?: BadgeVariant }) {
-    return (
-        <span
-            className={clsx("inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold", variantClasses[variant], className)}
-            {...props}
-        />
-    );
+}: HTMLAttributes<HTMLSpanElement> & VariantProps<typeof badgeVariants>) {
+    return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
