@@ -2,13 +2,29 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
-import { ArrowRight, Cpu } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, Cpu, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { getModules } from "@/lib/api";
 import { modulesForOfflineDisplay, writeCachedModules } from "@/lib/modules/catalog";
+
+const MODULE_ENABLED_PREFIX = "acadia.module-enabled.";
+
+function loadAllModuleEnabled(moduleIds: string[]): Record<string, boolean> {
+    return Object.fromEntries(
+        moduleIds.map((id) => {
+            const raw = typeof window !== "undefined"
+                ? window.localStorage.getItem(MODULE_ENABLED_PREFIX + id)
+                : null;
+            return [id, raw === null ? true : raw === "true"];
+        }),
+    );
+}
 
 export default function ModulesIndexPage() {
     const { data: liveModules, isLoading, isError, refetch } = useQuery({
@@ -22,6 +38,42 @@ export default function ModulesIndexPage() {
 
     const modules = useMemo(() => modulesForOfflineDisplay(liveModules), [liveModules]);
 
+    const [search, setSearch] = useState("");
+    const [moduleEnabled, setModuleEnabled] = useState<Record<string, boolean>>({});
+
+    // Initialise enabled map once modules are available
+    useEffect(() => {
+        if (modules.length === 0) return;
+        setModuleEnabled(loadAllModuleEnabled(modules.map((m) => m.id)));
+    }, [modules.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const toggleEnabled = (id: string) => {
+        setModuleEnabled((prev) => {
+            const next = { ...prev, [id]: !prev[id] };
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem(MODULE_ENABLED_PREFIX + id, String(next[id]));
+            }
+            return next;
+        });
+    };
+
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return modules;
+        return modules.filter(
+            (m) =>
+                m.name.toLowerCase().includes(q) ||
+                m.id.toLowerCase().includes(q) ||
+                (m.category ?? "").toLowerCase().includes(q) ||
+                (m.description ?? "").toLowerCase().includes(q),
+        );
+    }, [modules, search]);
+
+    const enabledCount = useMemo(
+        () => modules.filter((m) => moduleEnabled[m.id] !== false).length,
+        [modules, moduleEnabled],
+    );
+
     return (
         <div className="space-y-4">
             <Card>
@@ -30,6 +82,7 @@ export default function ModulesIndexPage() {
                         <div className="mb-2 flex items-center gap-2">
                             <Cpu size={20} className="text-muted-foreground" />
                             <Badge variant={isError ? "warning" : "success"}>{isError ? "Offline inventory" : "Server inventory"}</Badge>
+                            <Badge variant="secondary">{enabledCount} / {modules.length} enabled</Badge>
                         </div>
                         <CardTitle className="text-2xl">Modules</CardTitle>
                         <CardDescription>
@@ -38,19 +91,49 @@ export default function ModulesIndexPage() {
                                 : "Server-discovered modules with categories, schema type URLs, versions, and descriptions."}
                         </CardDescription>
                     </div>
-                    <Button type="button" variant="outline" onClick={() => void refetch()}>Refresh</Button>
+                    <div className="flex shrink-0 items-center gap-2">
+                        <div className="relative w-56">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search modules…"
+                                className="pl-8"
+                            />
+                        </div>
+                        <Button type="button" variant="outline" onClick={() => void refetch()}>Refresh</Button>
+                    </div>
                 </CardHeader>
             </Card>
 
+            {search && (
+                <p className="text-sm text-muted-foreground">
+                    {filtered.length} result{filtered.length !== 1 ? "s" : ""} for &ldquo;{search}&rdquo;
+                </p>
+            )}
+
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {isLoading && !modules.length && Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-44 animate-pulse rounded-xl bg-muted" />)}
-                {modules.map((module) => (
-                    <Link key={module.id} href={`/modules/${module.id}`}>
-                        <Card className="h-full transition-colors hover:bg-accent/50">
+                {filtered.map((module) => {
+                    const enabled = moduleEnabled[module.id] !== false;
+                    return (
+                        <Card key={module.id} className={cn("h-full transition-colors", !enabled && "opacity-60")}>
                             <CardHeader>
                                 <div className="flex items-start justify-between gap-3">
-                                    <Badge variant="outline">{module.category || "Module"}</Badge>
-                                    <ArrowRight size={16} className="text-muted-foreground" />
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <Badge variant="outline">{module.category || "Module"}</Badge>
+                                        {!enabled && <Badge variant="destructive">Disabled</Badge>}
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <Switch
+                                            checked={enabled}
+                                            onClick={(e) => { e.preventDefault(); toggleEnabled(module.id); }}
+                                            aria-label={enabled ? "Disable module" : "Enable module"}
+                                        />
+                                        <Link href={`/modules/${module.id}`} onClick={(e) => e.stopPropagation()}>
+                                            <ArrowRight size={16} className="text-muted-foreground hover:text-foreground" />
+                                        </Link>
+                                    </div>
                                 </div>
                                 <CardTitle>{module.name || module.id}</CardTitle>
                                 <CardDescription className="line-clamp-3">{module.description || "No module description supplied by the server."}</CardDescription>
@@ -62,8 +145,11 @@ export default function ModulesIndexPage() {
                                 <div className="truncate"><span className="font-medium text-foreground">Result:</span> {module.result_type_url || "Not reported"}</div>
                             </CardContent>
                         </Card>
-                    </Link>
-                ))}
+                    );
+                })}
+                {!isLoading && filtered.length === 0 && modules.length > 0 && (
+                    <div className="col-span-full py-10 text-center text-muted-foreground">No modules match &ldquo;{search}&rdquo;</div>
+                )}
             </section>
         </div>
     );

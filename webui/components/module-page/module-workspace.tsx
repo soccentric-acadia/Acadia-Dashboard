@@ -65,6 +65,16 @@ function testPlanStorageKey(moduleId: string): string {
   return `acadia.module-tests.${moduleId}`;
 }
 
+function moduleEnabledStorageKey(moduleId: string): string {
+  return `acadia.module-enabled.${moduleId}`;
+}
+
+function loadModuleEnabled(moduleId: string): boolean {
+  if (typeof window === "undefined") return true;
+  const raw = window.localStorage.getItem(moduleEnabledStorageKey(moduleId));
+  return raw === null ? true : raw === "true";
+}
+
 function initialTestPlan(moduleId: string, tests: ModuleTestDefinition[]): TestPlanState {
   const defaults = Object.fromEntries(
     tests.map((test) => [
@@ -122,6 +132,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   const [now, setNow] = useState(() => Date.now());
   const moduleTests = useMemo(() => testsForModule(module), [module]);
   const [testPlan, setTestPlan] = useState<TestPlanState>(() => initialTestPlan(module.id, moduleTests));
+  const [moduleEnabled, setModuleEnabled] = useState<boolean>(() => loadModuleEnabled(module.id));
   const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set());
   const [modeFilter, setModeFilter] = useState<"all" | ExecutionMode>("all");
 
@@ -200,6 +211,15 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
     window.localStorage.setItem(testPlanStorageKey(module.id), JSON.stringify(testPlan));
   }, [module.id, testPlan]);
 
+  useEffect(() => {
+    window.localStorage.setItem(moduleEnabledStorageKey(module.id), String(moduleEnabled));
+  }, [module.id, moduleEnabled]);
+
+  const toggleModuleEnabled = () => {
+    if (isRunning) return;
+    setModuleEnabled((prev) => !prev);
+  };
+
   const setTestEnabled = (testId: string, enabled: boolean) => {
     setTestPlan((previous) => ({
       ...previous,
@@ -240,6 +260,10 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   }, [activeEnabledTests, testPlan]);
 
   useEffect(() => {
+    if (!moduleEnabled) {
+      setActiveModuleSelection(null);
+      return;
+    }
     setActiveModuleSelection({
       moduleId: module.id,
       moduleName: module.name || module.id,
@@ -249,7 +273,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
     });
 
     return () => setActiveModuleSelection(null);
-  }, [activeModuleConfig, module.config_type_url, module.id, module.name, setActiveModuleSelection]);
+  }, [activeModuleConfig, module.config_type_url, module.id, module.name, moduleEnabled, setActiveModuleSelection]);
 
   const mergedResults = useMemo(() => {
     const base = selectedResultsData?.results ?? [];
@@ -282,8 +306,8 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                 <Badge variant={isRunning ? "warning" : "secondary"}>
                   {isRunning ? "Running" : "Idle"}
                 </Badge>
-                <Badge variant={activeEnabledTests.length > 0 ? "success" : "destructive"}>
-                  {activeEnabledTests.length}/{moduleTests.length} tests enabled
+                <Badge variant={!moduleEnabled ? "destructive" : activeEnabledTests.length > 0 ? "success" : "destructive"}>
+                  {!moduleEnabled ? "Module disabled" : `${activeEnabledTests.length}/${moduleTests.length} tests enabled`}
                 </Badge>
               </div>
               <h1 className="text-3xl font-bold tracking-tight">
@@ -293,6 +317,20 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                 {module.description || "No description was reported for this module."}
               </p>
               <p className="mt-1 text-xs text-muted-foreground/70">{runningStatus}</p>
+            </div>
+
+            {/* Module enable/disable */}
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 px-6 py-4">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Module</span>
+              <Switch
+                checked={moduleEnabled}
+                disabled={isRunning}
+                onClick={toggleModuleEnabled}
+                aria-label={moduleEnabled ? "Disable module" : "Enable module"}
+              />
+              <span className={cn("text-xs font-semibold", moduleEnabled ? "text-success" : "text-destructive")}>
+                {moduleEnabled ? "Enabled" : "Disabled"}
+              </span>
             </div>
 
             {/* Right: metadata tiles */}
@@ -325,13 +363,17 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_400px]">
 
         {/* ── HAL Tests table ─────────────────────────────────────────── */}
-        <Card>
+        <Card className={cn(!moduleEnabled && "opacity-60 pointer-events-none")}>
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle>HAL Test Suite</CardTitle>
-              <Badge variant={activeEnabledTests.length > 0 ? "success" : "destructive"}>
-                {activeEnabledTests.length} enabled for {modeLabel(mode)}
-              </Badge>
+              {!moduleEnabled ? (
+                <Badge variant="destructive">Module disabled — excluded from runs</Badge>
+              ) : (
+                <Badge variant={activeEnabledTests.length > 0 ? "success" : "destructive"}>
+                  {activeEnabledTests.length} enabled for {modeLabel(mode)}
+                </Badge>
+              )}
             </div>
             <CardDescription>
               Toggle tests on/off with the switch. Use ⚙ to configure per-test parameters. Greyed rows are not available in the current global mode.
