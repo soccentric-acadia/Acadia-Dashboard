@@ -2,8 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
-import { Activity, AlertTriangle, ArrowRight, Cpu, Database, FileText, RadioTower, Server } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Activity, AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, Cpu, Database, FileText, RadioTower, Server } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +35,11 @@ export default function DashboardPage() {
     const categories = useMemo(() => Array.from(new Set(modules.map((module) => module.category || "Uncategorized"))).sort(), [modules]);
     const serverOnline = !health.isError && health.data?.status === "ok";
     const latestRun = runs.data?.runs?.[0];
+
+    const PAGE_SIZE = 10;
+    const [inventoryPage, setInventoryPage] = useState(0);
+    const pageCount = Math.ceil(modules.length / PAGE_SIZE);
+    const pagedModules = modules.slice(inventoryPage * PAGE_SIZE, (inventoryPage + 1) * PAGE_SIZE);
 
     return (
         <div className="space-y-4">
@@ -82,7 +87,7 @@ export default function DashboardPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {modules.map((module) => (
+                                {pagedModules.map((module) => (
                                     <TableRow key={module.id}>
                                         <TableCell><Link href={`/modules/${module.id}`} className="font-semibold text-primary hover:underline">{module.name || module.id}</Link><div className="text-xs text-muted-foreground">{module.id}</div></TableCell>
                                         <TableCell><Badge variant="outline">{module.category || "Module"}</Badge></TableCell>
@@ -93,6 +98,30 @@ export default function DashboardPage() {
                                 ))}
                             </TableBody>
                         </Table>
+                        {pageCount > 1 && (
+                            <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+                                <span>{inventoryPage * PAGE_SIZE + 1}–{Math.min((inventoryPage + 1) * PAGE_SIZE, modules.length)} of {modules.length}</span>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        disabled={inventoryPage === 0}
+                                        onClick={() => setInventoryPage((p) => p - 1)}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-input hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
+                                    <span className="px-2">{inventoryPage + 1} / {pageCount}</span>
+                                    <button
+                                        type="button"
+                                        disabled={inventoryPage >= pageCount - 1}
+                                        onClick={() => setInventoryPage((p) => p + 1)}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-input hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+                                    >
+                                        <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
