@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Acadia IV&V Web Console
 
-## Getting Started
+Next.js operator console for the SiliconCentric IV&V platform. The UI talks to the Acadia Server REST API and documented run/log SSE streams only.
 
-First, run the development server:
+## Features
+
+- Frosted desktop shell with module navigation, mode switcher, global Start/Stop, connection status, and keyboard shortcuts.
+- Server-discovered module pages with mode-specific configuration sections, live/current results, rolling charts for streaming modes, event/result tables, and previous run review.
+- Logs page with server-side history filters and active-run live tail.
+- Settings area with General, OTA Host, and OTA Device tabs.
+- Honest offline, empty, deferred, and OTA-not-yet-triggered states.
+- Light/dark/system theme preference stored locally.
+
+## Environment
+
+Set the Acadia Server base URL if it is not running on the default local address:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_ACADIA_SERVER=http://localhost:8080
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Development
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open `http://localhost:3000` unless Next.js reports a different port.
 
-## Learn More
+From the repository root you can also use:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+make install
+make dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Validation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run lint
+npm run build
+```
 
-## Deploy on Vercel
+The production build statically prerenders the shell routes and keeps `/modules/[moduleId]` dynamic for server-provided module IDs.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## API Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The API inventory and source-code findings are documented in `../WEB_FINDINGS.md`. Where UI behavior depends on backend support, the interface stays explicit: device OTA upload lands the image in `/tmp`, and the future update trigger step remains disabled until the server/client command exists.
