@@ -37,9 +37,23 @@ const AppShellContext = createContext<AppShellState | null>(null);
 
 const SIDEBAR_KEY = "acadia.sidebar.collapsed";
 const THEME_KEY = "acadia.theme.mode";
+const DEFAULT_MODE_KEY = "acadia.prefs.defaultMode";
+
+function readDefaultMode(): ExecutionMode {
+  if (typeof window === "undefined") return "single_shot";
+  try {
+    const storedMode = JSON.parse(window.localStorage.getItem(DEFAULT_MODE_KEY) ?? "null") as unknown;
+    if (storedMode === "single_shot" || storedMode === "monitoring" || storedMode === "event" || storedMode === "long_run") {
+      return storedMode;
+    }
+  } catch {
+    return "single_shot";
+  }
+  return "single_shot";
+}
 
 export function AppShellProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<ExecutionMode>("single_shot");
+  const [mode, setMode] = useState<ExecutionMode>(() => readDefaultMode());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_KEY) === "true";

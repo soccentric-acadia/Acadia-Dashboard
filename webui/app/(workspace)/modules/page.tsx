@@ -93,22 +93,23 @@ function ModulesContent() {
     }, [latestResultsData]);
 
     const [search, setSearch] = useState("");
-    const [moduleEnabled, setModuleEnabled] = useState<Record<string, boolean>>({});
+    const [moduleEnabledOverrides, setModuleEnabledOverrides] = useState<Record<string, boolean>>({});
 
     const searchParams = useSearchParams();
     const urlFilter = searchParams.get("filter") ?? ""; // "disabled" | "failed" | ""
 
-    // Initialise enabled map once modules are available
-    useEffect(() => {
-        if (modules.length === 0) return;
-        setModuleEnabled(loadAllModuleEnabled(modules.map((m) => m.id)));
-    }, [modules.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    const storedModuleEnabled = useMemo(() => loadAllModuleEnabled(modules.map((m) => m.id)), [modules]);
+    const moduleEnabled = useMemo(
+        () => ({ ...storedModuleEnabled, ...moduleEnabledOverrides }),
+        [moduleEnabledOverrides, storedModuleEnabled],
+    );
 
     const toggleEnabled = (id: string) => {
-        setModuleEnabled((prev) => {
-            const next = { ...prev, [id]: !prev[id] };
+        const nextValue = !(moduleEnabled[id] ?? true);
+        setModuleEnabledOverrides((prev) => {
+            const next = { ...prev, [id]: nextValue };
             if (typeof window !== "undefined") {
-                window.localStorage.setItem(MODULE_ENABLED_PREFIX + id, String(next[id]));
+                window.localStorage.setItem(MODULE_ENABLED_PREFIX + id, String(nextValue));
             }
             return next;
         });

@@ -17,7 +17,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { getRunResults, getRuns } from "@/lib/api";
 import { testsForModule, type ModuleTestDefinition, type ModuleTestField } from "@/lib/modules/catalog";
@@ -180,7 +179,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
       const running = payload.status.toLowerCase().includes("running");
       setIsRunning(running);
       if (!running) {
-        setActiveRunId(activeRunId);
+        setActiveRunId(null);
         void refetchResults();
       }
     });
@@ -290,14 +289,6 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
     }
     return map;
   }, [mergedResults]);
-
-  const chartData = useMemo(() => {
-    const all = toChartRows(mergedResults);
-    if (mode !== "monitoring" && mode !== "long_run") return all;
-    return all.filter((row) => now - row.ts <= 60_000);
-  }, [mergedResults, mode, now]);
-
-  const latest = mergedResults[0];
 
   const viewResults = useMemo(() => {
     if (!selectedTestId) return mergedResults;

@@ -2,6 +2,7 @@
 
 /* ─── shadcn/ui design tokens ─────────────────────────────────────── */
 :root {
+  --shell-header-height: 5.625rem;
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
   --card: 0 0% 100%;
@@ -26,6 +27,12 @@
   --input: 240 5.9% 90%;
   --ring: 240 5.9% 10%;
   --radius: 0.5rem;
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --shell-header-height: 3.5rem;
+  }
 }
 
 .dark {

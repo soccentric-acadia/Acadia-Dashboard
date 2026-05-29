@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { ChevronRight, RefreshCw, Trash2, Upload } from "lucide-react";
@@ -81,13 +81,15 @@ function SectionCard({ title, description, children }: {
 
 /** Persistent localStorage-backed preference hook */
 function usePref<T>(key: string, defaultValue: T): [T, (v: T) => void] {
-    const [value, setValue] = useState<T>(defaultValue);
-    useEffect(() => {
+    const [value, setValue] = useState<T>(() => {
+        if (typeof window === "undefined") return defaultValue;
         try {
             const raw = window.localStorage.getItem(key);
-            if (raw !== null) setValue(JSON.parse(raw) as T);
-        } catch { /* ignore */ }
-    }, [key]);
+            return raw !== null ? JSON.parse(raw) as T : defaultValue;
+        } catch {
+            return defaultValue;
+        }
+    });
     const set = useCallback((v: T) => {
         setValue(v);
         try { window.localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ }
@@ -231,14 +233,15 @@ export default function SettingsPage() {
     const modules = useQuery({ queryKey: ["modules"], queryFn: getModules });
     const retention = useQuery({ queryKey: ["retention"], queryFn: getRetentionSettings });
 
-    // Latency ping
-    const [latency, setLatency] = useState<number | null>(null);
-    const measureLatency = useCallback(async () => {
-        const start = performance.now();
-        try { await getHealth(); setLatency(Math.round(performance.now() - start)); }
-        catch { setLatency(null); }
-    }, []);
-    useEffect(() => { void measureLatency(); }, [measureLatency]);
+    const latency = useQuery({
+        queryKey: ["latency"],
+        queryFn: async () => {
+            const start = performance.now();
+            await getHealth();
+            return Math.round(performance.now() - start);
+        },
+        retry: 0,
+    });
 
     // Appearance prefs
     const [density, setDensity] = usePref<"comfortable" | "compact">("acadia.prefs.density", "comfortable");
@@ -252,6 +255,8 @@ export default function SettingsPage() {
     // Notification prefs
     const [notifyComplete, setNotifyComplete] = usePref<boolean>("acadia.prefs.notifyComplete", false);
     const [notifyFail, setNotifyFail] = usePref<boolean>("acadia.prefs.notifyFail", false);
+    const [operatorName, setOperatorName] = usePref<string>("acadia.prefs.operatorName", "");
+    const [operatorEmail, setOperatorEmail] = usePref<string>("acadia.prefs.operatorEmail", "");
     const notifPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
     async function requestNotifPermission() {
         if (typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -260,14 +265,10 @@ export default function SettingsPage() {
     }
 
     // Data & retention
-    const [retentionDays, setRetentionDays] = useState(30);
-    const [maxResults, setMaxResults] = useState(10_000);
-    useEffect(() => {
-        if (retention.data) {
-            setRetentionDays(retention.data.retention_days);
-            setMaxResults(retention.data.max_run_results);
-        }
-    }, [retention.data]);
+    const [retentionDaysDraft, setRetentionDays] = useState<number | null>(null);
+    const [maxResultsDraft, setMaxResults] = useState<number | null>(null);
+    const retentionDays = retentionDaysDraft ?? retention.data?.retention_days ?? 30;
+    const maxResults = maxResultsDraft ?? retention.data?.max_run_results ?? 10_000;
     const [purgeStatus, setPurgeStatus] = useState<string | null>(null);
     async function handlePurge() {
         setPurgeStatus("Applying...");
@@ -308,8 +309,8 @@ export default function SettingsPage() {
                 } />
                 <Row label="Latency" value={
                     <span className="flex items-center gap-2">
-                        {latency !== null ? `${latency} ms` : "—"}
-                        <button type="button" onClick={() => void measureLatency()} title="Re-measure" className="text-muted-foreground transition-colors hover:text-foreground">
+                        {typeof latency.data === "number" ? `${latency.data} ms` : "—"}
+                        <button type="button" onClick={() => void latency.refetch()} title="Re-measure" className="text-muted-foreground transition-colors hover:text-foreground">
                             <RefreshCw size={12} />
                         </button>
                     </span>
@@ -375,10 +376,10 @@ export default function SettingsPage() {
             {/* ── 5. Operator ── */}
             <SectionCard title="Operator" description="Auth not yet implemented — fields saved locally only.">
                 <Row label="Name" value={
-                    <input className="h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator name" placeholder="Your name" />
+                    <input value={operatorName} onChange={(event) => setOperatorName(event.target.value)} className="h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator name" placeholder="Your name" />
                 } />
                 <Row label="Email" value={
-                    <input type="email" className="h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator email" placeholder="you@acme.com" />
+                    <input type="email" value={operatorEmail} onChange={(event) => setOperatorEmail(event.target.value)} className="h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator email" placeholder="you@acme.com" />
                 } />
                 <Row label="Role" value={<span className="inline-flex items-center gap-1 text-muted-foreground">Unassigned <ChevronRight size={13} /></span>} />
             </SectionCard>

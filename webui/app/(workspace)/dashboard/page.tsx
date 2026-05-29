@@ -28,21 +28,47 @@ import {
     YAxis,
 } from "recharts";
 
-const CHART_COLORS: Record<string, string> = {
-    pass: "#16a34a",
-    fail: "#dc2626",
-    running: "#d97706",
-    default: "#94a3b8",
-};
-const RESULT_PIE_COLORS: Record<string, string> = {
-    Pass: "#16a34a",
-    Fail: "#dc2626",
-    Other: "#94a3b8",
-};
+const CHART_COLOR_PREFS = {
+    default: {
+        pass: "#16a34a",
+        fail: "#dc2626",
+        running: "#d97706",
+        default: "#94a3b8",
+        category: "#6366f1",
+    },
+    pastel: {
+        pass: "#4ade80",
+        fail: "#fb7185",
+        running: "#fbbf24",
+        default: "#cbd5e1",
+        category: "#38bdf8",
+    },
+    "high-contrast": {
+        pass: "#15803d",
+        fail: "#b91c1c",
+        running: "#a16207",
+        default: "#475569",
+        category: "#1d4ed8",
+    },
+} as const;
+
+function readChartPrefs() {
+    if (typeof window === "undefined") return { colors: CHART_COLOR_PREFS.default, rollingWindowHours: 6 };
+    try {
+        const chartColors = JSON.parse(window.localStorage.getItem("acadia.prefs.chartColors") ?? "\"default\"") as keyof typeof CHART_COLOR_PREFS;
+        const rollingWindow = JSON.parse(window.localStorage.getItem("acadia.prefs.rollingWindow") ?? "\"6h\"") as string;
+        const rollingWindowHours = rollingWindow === "1h" ? 1 : rollingWindow === "24h" ? 24 : 6;
+        return { colors: CHART_COLOR_PREFS[chartColors] ?? CHART_COLOR_PREFS.default, rollingWindowHours };
+    } catch {
+        return { colors: CHART_COLOR_PREFS.default, rollingWindowHours: 6 };
+    }
+}
 
 export default function DashboardPage() {
     const { serverOnline } = useAppShell();
     const router = useRouter();
+    const [chartPrefs] = useState(() => readChartPrefs());
+    const runHistoryLimit = chartPrefs.rollingWindowHours === 1 ? 5 : chartPrefs.rollingWindowHours === 24 ? 20 : 15;
     const target = useQuery({ queryKey: ["target"], queryFn: getTarget, retry: 1, refetchInterval: 15_000 });
     const liveModules = useQuery({ queryKey: ["modules"], queryFn: getModules });
     const runs = useQuery({ queryKey: ["runs", "dashboard"], queryFn: () => getRuns({ limit: 20 }), refetchInterval: 15_000, enabled: serverOnline !== false });
@@ -62,17 +88,14 @@ export default function DashboardPage() {
     );
     const totalTests = useMemo(() => modules.reduce((s, m) => s + (moduleTestCounts[m.id] ?? 0), 0), [modules, moduleTestCounts]);
 
-    // Module enabled states from localStorage
-    const [moduleEnabledMap, setModuleEnabledMap] = useState<Record<string, boolean>>({});
-    useEffect(() => {
-        if (modules.length === 0) return;
+    const moduleEnabledMap = useMemo(() => {
         const map: Record<string, boolean> = {};
         for (const m of modules) {
-            const raw = window.localStorage.getItem(`acadia.module-enabled.${m.id}`);
+            const raw = typeof window === "undefined" ? null : window.localStorage.getItem(`acadia.module-enabled.${m.id}`);
             map[m.id] = raw === null ? true : raw === "true";
         }
-        setModuleEnabledMap(map);
-    }, [modules.length]); // eslint-disable-line react-hooks/exhaustive-deps
+        return map;
+    }, [modules]);
     const enabledModuleCount = modules.filter((m) => moduleEnabledMap[m.id] !== false).length;
 
     // Latest run results for pass/fail stats
@@ -116,7 +139,7 @@ export default function DashboardPage() {
     const runHistoryBars = useMemo(
         () =>
             (runs.data?.runs ?? [])
-                .slice(0, 15)
+                .slice(0, runHistoryLimit)
                 .reverse()
                 .map((run, i) => ({
                     i: i + 1,
@@ -124,7 +147,7 @@ export default function DashboardPage() {
                     status: run.status?.toLowerCase() ?? "unknown",
                     label: new Date(run.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
                 })),
-        [runs.data],
+        [runHistoryLimit, runs.data],
     );
 
     const moduleCategoryDist = useMemo(() => {
@@ -173,81 +196,97 @@ export default function DashboardPage() {
                 </section>
             ) : (
                 <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <Link href="/modules" className="rounded-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        <Card className="transition-colors hover:bg-muted/50">
-                            <CardHeader className="pb-2">
-                                <CardDescription>Modules</CardDescription>
-                                <CardTitle className="flex items-center gap-2 text-3xl"><Cpu size={24} />{modules.length}</CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-0 text-xs text-muted-foreground">
-                                <span className="text-success font-medium">{enabledModuleCount} enabled</span>
-                                {" · "}
-                                <button
-                                    type="button"
-                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push("/modules?filter=disabled"); }}
-                                    className={modules.length - enabledModuleCount > 0 ? "text-destructive font-medium hover:underline" : ""}
-                                >
-                                    {modules.length - enabledModuleCount} disabled
-                                </button>
-                            </CardContent>
-                        </Card>
-                    </Link>
+                    <Card
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => router.push("/modules")}
+                        onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") router.push("/modules"); }}
+                        className="cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                        <CardHeader className="pb-2">
+                            <CardDescription>Modules</CardDescription>
+                            <CardTitle className="flex items-center gap-2 text-3xl"><Cpu size={24} />{modules.length}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0 text-xs text-muted-foreground">
+                            <span className="text-success font-medium">{enabledModuleCount} enabled</span>
+                            {" · "}
+                            <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push("/modules?filter=disabled"); }}
+                                className={modules.length - enabledModuleCount > 0 ? "text-destructive font-medium hover:underline" : ""}
+                            >
+                                {modules.length - enabledModuleCount} disabled
+                            </button>
+                        </CardContent>
+                    </Card>
 
-                    <Link href="/modules" className="rounded-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        <Card className="transition-colors hover:bg-muted/50">
-                            <CardHeader className="pb-2">
-                                <CardDescription>Tests</CardDescription>
-                                <CardTitle className="flex items-center gap-2 text-3xl"><FlaskConical size={24} />{totalTests}</CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-0 text-xs text-muted-foreground">
-                                across {modules.length} modules
-                            </CardContent>
-                        </Card>
-                    </Link>
+                    <Card
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => router.push("/modules")}
+                        onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") router.push("/modules"); }}
+                        className="cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                        <CardHeader className="pb-2">
+                            <CardDescription>Tests</CardDescription>
+                            <CardTitle className="flex items-center gap-2 text-3xl"><FlaskConical size={24} />{totalTests}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0 text-xs text-muted-foreground">
+                            across {modules.length} modules
+                        </CardContent>
+                    </Card>
 
-                    <Link href="/runs" className="rounded-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        <Card className="transition-colors hover:bg-muted/50">
-                            <CardHeader className="pb-2">
-                                <CardDescription>Last Run</CardDescription>
-                                <CardTitle className="flex items-center gap-2 text-xl">
-                                    <Activity size={22} />
-                                    {latestRun
-                                        ? <Badge variant={statusVariant(latestRun.status)}>{latestRun.status}</Badge>
-                                        : <span className="text-muted-foreground text-base">No runs</span>}
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-0 text-xs">
-                                {runResultStats ? (
-                                    <span>
-                                        <span className="text-success font-medium">{runResultStats.pass} passed</span>
-                                        {" · "}
-                                        <button
-                                            type="button"
-                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push("/modules?filter=failed"); }}
-                                            className={runResultStats.fail > 0 ? "text-destructive font-medium hover:underline" : "text-muted-foreground"}
-                                        >
-                                            {runResultStats.fail} failed
-                                        </button>
-                                        <span className="text-muted-foreground"> of {runResultStats.total}</span>
-                                    </span>
-                                ) : (
-                                    <span className="text-muted-foreground">No result data</span>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </Link>
+                    <Card
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => router.push("/runs")}
+                        onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") router.push("/runs"); }}
+                        className="cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                        <CardHeader className="pb-2">
+                            <CardDescription>Last Run</CardDescription>
+                            <CardTitle className="flex items-center gap-2 text-xl">
+                                <Activity size={22} />
+                                {latestRun
+                                    ? <Badge variant={statusVariant(latestRun.status)}>{latestRun.status}</Badge>
+                                    : <span className="text-muted-foreground text-base">No runs</span>}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0 text-xs">
+                            {runResultStats ? (
+                                <span>
+                                    <span className="text-success font-medium">{runResultStats.pass} passed</span>
+                                    {" · "}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push("/modules?filter=failed"); }}
+                                        className={runResultStats.fail > 0 ? "text-destructive font-medium hover:underline" : "text-muted-foreground"}
+                                    >
+                                        {runResultStats.fail} failed
+                                    </button>
+                                    <span className="text-muted-foreground"> of {runResultStats.total}</span>
+                                </span>
+                            ) : (
+                                <span className="text-muted-foreground">No result data</span>
+                            )}
+                        </CardContent>
+                    </Card>
 
-                    <Link href="/settings" className="rounded-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        <Card className="transition-colors hover:bg-muted/50">
-                            <CardHeader className="pb-2">
-                                <CardDescription>Server version</CardDescription>
-                                <CardTitle className="flex items-center gap-2 text-xl"><Server size={22} />{serverOnline ? (liveModules.data ? "Online" : "—") : "Offline"}</CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-0 text-xs text-muted-foreground font-mono">
-                                {target.data?.hal_version ? `HAL ${target.data.hal_version}` : target.data?.client_version ? `Client ${target.data.client_version}` : "No version info"}
-                            </CardContent>
-                        </Card>
-                    </Link>
+                    <Card
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => router.push("/settings")}
+                        onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") router.push("/settings"); }}
+                        className="cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                        <CardHeader className="pb-2">
+                            <CardDescription>Server version</CardDescription>
+                            <CardTitle className="flex items-center gap-2 text-xl"><Server size={22} />{serverOnline ? (liveModules.data ? "Online" : "—") : "Offline"}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0 text-xs text-muted-foreground font-mono">
+                            {target.data?.hal_version ? `HAL ${target.data.hal_version}` : target.data?.client_version ? `Client ${target.data.client_version}` : "No version info"}
+                        </CardContent>
+                    </Card>
                 </section>
             )}
 
@@ -273,7 +312,10 @@ export default function DashboardPage() {
                                         dataKey="value"
                                     >
                                         {resultBreakdown.map((entry) => (
-                                            <Cell key={entry.name} fill={RESULT_PIE_COLORS[entry.name] ?? "#94a3b8"} />
+                                            <Cell
+                                                key={entry.name}
+                                                fill={entry.name === "Pass" ? chartPrefs.colors.pass : entry.name === "Fail" ? chartPrefs.colors.fail : chartPrefs.colors.default}
+                                            />
                                         ))}
                                     </Pie>
                                     <Tooltip />
@@ -313,7 +355,7 @@ export default function DashboardPage() {
                                     />
                                     <Bar dataKey="value" radius={[3, 3, 0, 0]}>
                                         {runHistoryBars.map((entry) => (
-                                            <Cell key={entry.i} fill={CHART_COLORS[entry.status] ?? CHART_COLORS.default} />
+                                            <Cell key={entry.i} fill={chartPrefs.colors[entry.status as keyof typeof chartPrefs.colors] ?? chartPrefs.colors.default} />
                                         ))}
                                     </Bar>
                                 </BarChart>
@@ -343,7 +385,7 @@ export default function DashboardPage() {
                                     <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
                                     <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={76} />
                                     <Tooltip formatter={(v) => [v, "modules"]} />
-                                    <Bar dataKey="count" fill="#6366f1" radius={[0, 3, 3, 0]} />
+                                    <Bar dataKey="count" fill={chartPrefs.colors.category} radius={[0, 3, 3, 0]} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (

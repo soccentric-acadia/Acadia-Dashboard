@@ -23,7 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/modules", label: "Modules", icon: Boxes },
   { href: "/runs", label: "Run History", icon: History },
-  { href: "/settings/general", label: "Settings", icon: Settings, matchPrefix: "/settings" },
+  { href: "/settings", label: "Settings", icon: Settings, matchPrefix: "/settings" },
 ];
 
 function formatElapsed(seconds: number): string {

@@ -174,7 +174,7 @@ export default function RunsPage() {
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <Link
-                                            href="/modules"
+                                            href={`/runs/${run.id}`}
                                             onClick={(e) => e.stopPropagation()}
                                             className="inline-flex h-8 items-center rounded-md px-3 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                                         >

@@ -152,7 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
 
       {runError && (
-        <div className="sticky top-14 z-20 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive md:top-14">
+        <div className="sticky top-[var(--shell-header-height)] z-20 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {runError}
         </div>
       )}
@@ -167,7 +167,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onRegisterSearchFocus={registerModuleSearchFocus}
         />
 
-        <main className="min-h-[calc(100vh-3.5rem)] flex-1 overflow-auto p-5">{children}</main>
+        <main className="min-h-[calc(100vh-var(--shell-header-height))] flex-1 overflow-auto p-5">{children}</main>
       </div>
 
       <HelpShortcutsDialog open={showHelp} onClose={() => setShowHelp(false)} />

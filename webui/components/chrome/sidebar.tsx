@@ -93,7 +93,7 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "sticky top-14 h-[calc(100vh-3.5rem)] border-r border-border bg-background transition-[width]",
+        "sticky top-[var(--shell-header-height)] h-[calc(100vh-var(--shell-header-height))] border-r border-border bg-background transition-[width]",
         collapsed ? "w-[60px]" : "w-[280px]",
       )}
     >

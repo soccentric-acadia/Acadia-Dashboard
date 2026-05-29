@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const levels = ["", "debug", "info", "warn", "error", "fatal"];
+const AUTO_SCROLL_KEY = "acadia.prefs.autoScroll";
 
 function tone(level: string) {
     const normalized = level.toLowerCase();
@@ -25,9 +26,22 @@ export default function LogsPage() {
     const [source, setSource] = useState("");
     const [level, setLevel] = useState("");
     const [query, setQuery] = useState("");
-    const [autoScroll, setAutoScroll] = useState(true);
+    const [autoScroll, setAutoScrollState] = useState(() => {
+        if (typeof window === "undefined") return true;
+        try {
+            const stored = window.localStorage.getItem(AUTO_SCROLL_KEY);
+            return stored === null ? true : Boolean(JSON.parse(stored));
+        } catch {
+            return true;
+        }
+    });
     const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
     const bottomRef = useRef<HTMLDivElement>(null);
+
+    const setAutoScroll = (value: boolean) => {
+        setAutoScrollState(value);
+        try { window.localStorage.setItem(AUTO_SCROLL_KEY, JSON.stringify(value)); } catch { /* ignore */ }
+    };
 
     const { data } = useQuery({
         queryKey: ["logs", source, level, query],
@@ -83,7 +97,7 @@ export default function LogsPage() {
                                     Clear live ({liveLogs.length})
                                 </Button>
                             )}
-                            <Button type="button" variant="outline" size="sm" onClick={() => setAutoScroll((value) => !value)}>
+                            <Button type="button" variant="outline" size="sm" onClick={() => setAutoScroll(!autoScroll)}>
                                 {autoScroll ? <Pause size={14} /> : <Play size={14} />}
                                 {autoScroll ? "Pause auto-scroll" : "Resume auto-scroll"}
                             </Button>
