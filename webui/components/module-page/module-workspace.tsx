@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Settings2 } from "lucide-react";
+import { Activity, ChevronDown, Settings2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
@@ -116,6 +116,21 @@ function modeLabel(mode: ExecutionMode): string {
   return "Long-run";
 }
 
+function formatDuration(ns: number): string {
+  if (!ns) return "—";
+  if (ns < 1_000_000) return `${(ns / 1_000).toFixed(1)} µs`;
+  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(1)} ms`;
+  return `${(ns / 1_000_000_000).toFixed(2)} s`;
+}
+
+function resultVariant(status: string): "success" | "destructive" | "warning" | "secondary" {
+  const s = status?.toLowerCase() ?? "";
+  if (s.includes("pass")) return "success";
+  if (s.includes("fail") || s.includes("error")) return "destructive";
+  if (s.includes("warn")) return "warning";
+  return "secondary";
+}
+
 export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   const {
     mode,
@@ -134,9 +149,19 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   const [testPlan, setTestPlan] = useState<TestPlanState>(() => initialTestPlan(module.id, moduleTests));
   const [moduleEnabled, setModuleEnabled] = useState<boolean>(() => loadModuleEnabled(module.id));
   const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set());
+  const [expandedStatusTests, setExpandedStatusTests] = useState<Set<string>>(new Set());
 
   const toggleExpand = (testId: string) => {
     setExpandedTests((prev) => {
+      const next = new Set(prev);
+      if (next.has(testId)) next.delete(testId);
+      else next.add(testId);
+      return next;
+    });
+  };
+
+  const toggleStatusExpand = (testId: string) => {
+    setExpandedStatusTests((prev) => {
       const next = new Set(prev);
       if (next.has(testId)) next.delete(testId);
       else next.add(testId);
@@ -275,6 +300,18 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
     return [...liveResults, ...base];
   }, [isRunning, liveResults, selectedResultsData?.results]);
 
+  // Latest result per test_id for inline status
+  const testLatestResult = useMemo(() => {
+    const map: Record<string, TestResult> = {};
+    for (const r of mergedResults) {
+      if (!r.test_id) continue;
+      if (!map[r.test_id] || r.timestamp > map[r.test_id].timestamp) {
+        map[r.test_id] = r;
+      }
+    }
+    return map;
+  }, [mergedResults]);
+
   const chartData = useMemo(() => {
     const all = toChartRows(mergedResults);
     if (mode !== "monitoring" && mode !== "long_run") return all;
@@ -351,7 +388,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
               )}
             </div>
             <CardDescription>
-              Toggle tests on/off with the switch. Use ⚙ to configure per-test parameters. Greyed rows are not available in the current global mode.
+              Toggle tests on/off, configure with ⚙, and inspect results with the <Activity size={12} className="inline" /> icon. Greyed rows are not available in the current global mode.
             </CardDescription>
           </CardHeader>
 
@@ -360,12 +397,19 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    <th className="w-[40%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <th className="w-[35%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Test
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Supported modes
+                      Mode
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Last run
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Result
+                    </th>
+                    <th className="w-10 px-2 py-3" />
                     <th className="w-10 px-2 py-3" />
                     <th className="w-24 px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Enabled
@@ -378,8 +422,10 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                     const enabled = plan?.enabled ?? true;
                     const modeCompatible = test.modes.includes(mode);
                     const isExpanded = expandedTests.has(test.id);
+                    const isStatusExpanded = expandedStatusTests.has(test.id);
                     const hasFields = test.fields.length > 0;
                     const locked = isRunning || !modeCompatible || !enabled;
+                    const latestResult = testLatestResult[test.id] ?? null;
 
                     return (
                       <>
@@ -388,41 +434,41 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                           key={test.id}
                           className={cn(
                             "border-b border-border transition-colors",
-                            modeCompatible
-                              ? "hover:bg-muted/50"
-                              : "opacity-50",
+                            modeCompatible ? "hover:bg-muted/50" : "opacity-50",
                           )}
                         >
                           {/* Name + description */}
                           <td className="px-4 py-3">
-                            <div className="font-semibold">
-                              {test.name}
-                            </div>
+                            <div className="font-semibold">{test.name}</div>
                             <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
                               {test.description}
                             </div>
-                            {!modeCompatible && (
-                              <span className="mt-1 inline-block text-xs text-warning">
-                                Not available in {modeLabel(mode)} mode
-                              </span>
+                          </td>
+
+                          {/* Global mode compatibility */}
+                          <td className="px-4 py-3">
+                            <Badge variant={modeCompatible ? "success" : "secondary"}>
+                              {modeLabel(mode)}
+                            </Badge>
+                          </td>
+
+                          {/* Last run timestamp */}
+                          <td className="px-4 py-3 text-xs text-muted-foreground">
+                            {latestResult ? formatClock(latestResult.timestamp) : "—"}
+                          </td>
+
+                          {/* Latest result badge */}
+                          <td className="px-4 py-3">
+                            {latestResult ? (
+                              <Badge variant={resultVariant(latestResult.status)}>
+                                {latestResult.status}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
                             )}
                           </td>
 
-                          {/* Mode badges */}
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1">
-                              {test.modes.map((m) => (
-                                <Badge
-                                  key={m}
-                                  variant={m === mode ? "default" : "secondary"}
-                                >
-                                  {modeLabel(m)}
-                                </Badge>
-                              ))}
-                            </div>
-                          </td>
-
-                          {/* Config toggle */}
+                          {/* Config expand */}
                           <td className="px-2 py-3">
                             {hasFields && (
                               <button
@@ -437,6 +483,25 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                                 )}
                               >
                                 <Settings2 size={15} />
+                              </button>
+                            )}
+                          </td>
+
+                          {/* Status detail expand */}
+                          <td className="px-2 py-3">
+                            {latestResult && (
+                              <button
+                                type="button"
+                                onClick={() => toggleStatusExpand(test.id)}
+                                title="View result details"
+                                className={cn(
+                                  "rounded-md p-1.5 transition-colors",
+                                  isStatusExpanded
+                                    ? "bg-accent text-accent-foreground"
+                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                                )}
+                              >
+                                <Activity size={15} />
                               </button>
                             )}
                           </td>
@@ -463,7 +528,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                             key={`${test.id}-config`}
                             className="border-b border-border bg-muted/30"
                           >
-                            <td colSpan={4} className="px-6 pb-4 pt-3">
+                            <td colSpan={7} className="px-6 pb-4 pt-3">
                               <div className="flex items-center gap-2 mb-3">
                                 <Settings2 size={13} className="text-muted-foreground" />
                                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -541,14 +606,94 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                             </td>
                           </tr>
                         )}
+
+                        {/* ── Expanded status detail row ── */}
+                        {isStatusExpanded && latestResult && (
+                          <tr
+                            key={`${test.id}-status`}
+                            className="border-b border-border bg-muted/20"
+                          >
+                            <td colSpan={7} className="px-6 pb-4 pt-3">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Activity size={13} className="text-muted-foreground" />
+                                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Result detail — {test.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleStatusExpand(test.id)}
+                                  className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                  <ChevronDown size={14} />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs sm:grid-cols-3 lg:grid-cols-4">
+                                <div>
+                                  <div className="text-muted-foreground">Status</div>
+                                  <Badge variant={resultVariant(latestResult.status)} className="mt-1">
+                                    {latestResult.status}
+                                  </Badge>
+                                </div>
+                                <div>
+                                  <div className="text-muted-foreground">Time</div>
+                                  <div className="mt-1 font-medium">{formatClock(latestResult.timestamp)}</div>
+                                </div>
+                                <div>
+                                  <div className="text-muted-foreground">Duration</div>
+                                  <div className="mt-1 font-medium">{formatDuration(latestResult.duration_ns)}</div>
+                                </div>
+                                <div>
+                                  <div className="text-muted-foreground">Severity</div>
+                                  <div className="mt-1 font-medium">{latestResult.severity || "—"}</div>
+                                </div>
+                                {latestResult.error_message && (
+                                  <div className="col-span-2 sm:col-span-3 lg:col-span-4">
+                                    <div className="text-muted-foreground">Error</div>
+                                    <div className="mt-1 font-mono text-destructive">{latestResult.error_message}</div>
+                                  </div>
+                                )}
+                                {Object.keys(latestResult.metrics ?? {}).length > 0 && (
+                                  <div className="col-span-2 sm:col-span-3 lg:col-span-4">
+                                    <div className="mb-1 text-muted-foreground">Metrics</div>
+                                    <div className="flex flex-wrap gap-3">
+                                      {Object.entries(latestResult.metrics).map(([k, v]) => (
+                                        <span key={k} className="text-xs"><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {Object.keys(latestResult.monitoring ?? {}).length > 0 && (
+                                  <div className="col-span-2 sm:col-span-3 lg:col-span-4">
+                                    <div className="mb-1 text-muted-foreground">Monitoring</div>
+                                    <div className="flex flex-wrap gap-3">
+                                      {Object.entries(latestResult.monitoring).map(([k, v]) => (
+                                        <span key={k} className="text-xs"><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {Object.keys(latestResult.event ?? {}).length > 0 && (
+                                  <div className="col-span-2 sm:col-span-3 lg:col-span-4">
+                                    <div className="mb-1 text-muted-foreground">Events</div>
+                                    <div className="flex flex-wrap gap-3">
+                                      {Object.entries(latestResult.event).map(([k, v]) => (
+                                        <span key={k} className="text-xs"><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
                       </>
                     );
                   })}
 
                   {moduleTests.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                        No tests available for this filter.
+                      <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                        No tests available for this module.
                       </td>
                     </tr>
                   )}
