@@ -2,8 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Cpu, Search } from "lucide-react";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, Cpu, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +42,7 @@ function loadAllModuleEnabled(moduleIds: string[]): Record<string, boolean> {
     );
 }
 
-export default function ModulesIndexPage() {
+function ModulesContent() {
     const { data: liveModules, isLoading, isError, refetch } = useQuery({
         queryKey: ["modules"],
         queryFn: getModules,
@@ -94,6 +95,9 @@ export default function ModulesIndexPage() {
     const [search, setSearch] = useState("");
     const [moduleEnabled, setModuleEnabled] = useState<Record<string, boolean>>({});
 
+    const searchParams = useSearchParams();
+    const urlFilter = searchParams.get("filter") ?? ""; // "disabled" | "failed" | ""
+
     // Initialise enabled map once modules are available
     useEffect(() => {
         if (modules.length === 0) return;
@@ -112,15 +116,18 @@ export default function ModulesIndexPage() {
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return modules;
-        return modules.filter(
+        let base = modules;
+        if (urlFilter === "disabled") base = base.filter((m) => moduleEnabled[m.id] === false);
+        else if (urlFilter === "failed") base = base.filter((m) => moduleSummary[m.id]?.anyFailed);
+        if (!q) return base;
+        return base.filter(
             (m) =>
                 m.name.toLowerCase().includes(q) ||
                 m.id.toLowerCase().includes(q) ||
                 (m.category ?? "").toLowerCase().includes(q) ||
                 (m.description ?? "").toLowerCase().includes(q),
         );
-    }, [modules, search]);
+    }, [modules, search, urlFilter, moduleEnabled, moduleSummary]);
 
     const grouped = useMemo(() => {
         const map = new Map<string, typeof filtered>();
@@ -155,6 +162,11 @@ export default function ModulesIndexPage() {
                         </CardDescription>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                        {urlFilter && (
+                            <Link href="/modules" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent">
+                                <X size={12} /> Clear filter: {urlFilter}
+                            </Link>
+                        )}
                         <div className="relative w-56">
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                             <Input
@@ -167,23 +179,28 @@ export default function ModulesIndexPage() {
                         <Button type="button" variant="outline" onClick={() => void refetch()}>Refresh</Button>
                     </div>
                 </CardHeader>
-            </Card>
+            </Card >
 
             {search && (
                 <p className="text-sm text-muted-foreground">
                     {filtered.length} result{filtered.length !== 1 ? "s" : ""} for &ldquo;{search}&rdquo;
                 </p>
-            )}
+            )
+            }
 
-            {isLoading && !modules.length && (
-                <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                    {Array.from({ length: 10 }).map((_, index) => <div key={index} className="h-44 animate-pulse rounded-xl bg-muted" />)}
-                </section>
-            )}
+            {
+                isLoading && !modules.length && (
+                    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                        {Array.from({ length: 10 }).map((_, index) => <div key={index} className="h-44 animate-pulse rounded-xl bg-muted" />)}
+                    </section>
+                )
+            }
 
-            {!isLoading && filtered.length === 0 && modules.length > 0 && (
-                <div className="py-10 text-center text-muted-foreground">No modules match &ldquo;{search}&rdquo;</div>
-            )}
+            {
+                !isLoading && filtered.length === 0 && modules.length > 0 && (
+                    <div className="py-10 text-center text-muted-foreground">No modules match &ldquo;{search}&rdquo;</div>
+                )
+            }
 
             <div className="space-y-8">
                 {grouped.map(([category, mods]) => (
@@ -239,6 +256,14 @@ export default function ModulesIndexPage() {
                     </section>
                 ))}
             </div>
-        </div>
+        </div >
+    );
+}
+
+export default function ModulesIndexPage() {
+    return (
+        <Suspense>
+            <ModulesContent />
+        </Suspense>
     );
 }

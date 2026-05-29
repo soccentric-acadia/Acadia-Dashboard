@@ -11,15 +11,8 @@ import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getGlobalLogs, getModules, getRuns, getRunResults, getTarget } from "@/lib/api";
 import { modulesForOfflineDisplay, testsForModule, writeCachedModules } from "@/lib/modules/catalog";
+import { statusVariant } from "@/lib/utils";
 import { useAppShell } from "@/state/app-shell-context";
-
-function statusVariant(status: string | undefined): "success" | "warning" | "destructive" | "secondary" {
-    const normalized = status?.toLowerCase() ?? "";
-    if (normalized.includes("ok") || normalized.includes("online") || normalized.includes("pass") || normalized.includes("complete")) return "success";
-    if (normalized.includes("warn") || normalized.includes("running") || normalized.includes("pending")) return "warning";
-    if (normalized.includes("error") || normalized.includes("fail") || normalized.includes("offline")) return "destructive";
-    return "secondary";
-}
 
 export default function DashboardPage() {
     const { serverOnline } = useAppShell();
@@ -104,69 +97,84 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex gap-2">
                         <Link href="/modules"><Button type="button" variant="outline">All modules <ArrowRight size={16} /></Button></Link>
+                        <Link href="/runs"><Button type="button" variant="outline">Run history <Activity size={16} /></Button></Link>
                         <Link href="/logs"><Button type="button" variant="secondary">Logs <FileText size={16} /></Button></Link>
                     </div>
                 </CardHeader>
             </Card>
 
             {/* ── Stats row ── */}
-            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>Modules</CardDescription>
-                        <CardTitle className="flex items-center gap-2 text-3xl"><Cpu size={24} />{modules.length}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0 text-xs text-muted-foreground">
-                        <span className="text-success font-medium">{enabledModuleCount} enabled</span>
-                        {" · "}
-                        <span className={modules.length - enabledModuleCount > 0 ? "text-destructive font-medium" : ""}>{modules.length - enabledModuleCount} disabled</span>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>Tests</CardDescription>
-                        <CardTitle className="flex items-center gap-2 text-3xl"><FlaskConical size={24} />{totalTests}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0 text-xs text-muted-foreground">
-                        across {modules.length} modules
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>Last Run</CardDescription>
-                        <CardTitle className="flex items-center gap-2 text-xl">
-                            <Activity size={22} />
-                            {latestRun
-                                ? <Badge variant={statusVariant(latestRun.status)}>{latestRun.status}</Badge>
-                                : <span className="text-muted-foreground text-base">No runs</span>}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0 text-xs">
-                        {runResultStats ? (
-                            <span>
-                                <span className="text-success font-medium">{runResultStats.pass} passed</span>
+            {liveModules.isLoading && !modules.length ? (
+                <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />)}
+                </section>
+            ) : (
+                <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <Link href="/modules" className="rounded-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <Card className="transition-colors hover:bg-muted/50">
+                            <CardHeader className="pb-2">
+                                <CardDescription>Modules</CardDescription>
+                                <CardTitle className="flex items-center gap-2 text-3xl"><Cpu size={24} />{modules.length}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0 text-xs text-muted-foreground">
+                                <span className="text-success font-medium">{enabledModuleCount} enabled</span>
                                 {" · "}
-                                <span className={runResultStats.fail > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>{runResultStats.fail} failed</span>
-                                <span className="text-muted-foreground"> of {runResultStats.total}</span>
-                            </span>
-                        ) : (
-                            <span className="text-muted-foreground">No result data</span>
-                        )}
-                    </CardContent>
-                </Card>
+                                <Link href="/modules?filter=disabled" onClick={(e) => e.stopPropagation()} className={modules.length - enabledModuleCount > 0 ? "text-destructive font-medium hover:underline" : ""}>{modules.length - enabledModuleCount} disabled</Link>
+                            </CardContent>
+                        </Card>
+                    </Link>
 
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>Server version</CardDescription>
-                        <CardTitle className="flex items-center gap-2 text-xl"><Server size={22} />{serverOnline ? (liveModules.data ? "Online" : "—") : "Offline"}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0 text-xs text-muted-foreground font-mono">
-                        {target.data?.hal_version ? `HAL ${target.data.hal_version}` : target.data?.client_version ? `Client ${target.data.client_version}` : "No version info"}
-                    </CardContent>
-                </Card>
-            </section>
+                    <Link href="/modules" className="rounded-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <Card className="transition-colors hover:bg-muted/50">
+                            <CardHeader className="pb-2">
+                                <CardDescription>Tests</CardDescription>
+                                <CardTitle className="flex items-center gap-2 text-3xl"><FlaskConical size={24} />{totalTests}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0 text-xs text-muted-foreground">
+                                across {modules.length} modules
+                            </CardContent>
+                        </Card>
+                    </Link>
+
+                    <Link href="/runs" className="rounded-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <Card className="transition-colors hover:bg-muted/50">
+                            <CardHeader className="pb-2">
+                                <CardDescription>Last Run</CardDescription>
+                                <CardTitle className="flex items-center gap-2 text-xl">
+                                    <Activity size={22} />
+                                    {latestRun
+                                        ? <Badge variant={statusVariant(latestRun.status)}>{latestRun.status}</Badge>
+                                        : <span className="text-muted-foreground text-base">No runs</span>}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0 text-xs">
+                                {runResultStats ? (
+                                    <span>
+                                        <span className="text-success font-medium">{runResultStats.pass} passed</span>
+                                        {" · "}
+                                        <Link href="/modules?filter=failed" onClick={(e) => e.stopPropagation()} className={runResultStats.fail > 0 ? "text-destructive font-medium hover:underline" : "text-muted-foreground"}>{runResultStats.fail} failed</Link>
+                                        <span className="text-muted-foreground"> of {runResultStats.total}</span>
+                                    </span>
+                                ) : (
+                                    <span className="text-muted-foreground">No result data</span>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Link>
+
+                    <Link href="/settings" className="rounded-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <Card className="transition-colors hover:bg-muted/50">
+                            <CardHeader className="pb-2">
+                                <CardDescription>Server version</CardDescription>
+                                <CardTitle className="flex items-center gap-2 text-xl"><Server size={22} />{serverOnline ? (liveModules.data ? "Online" : "—") : "Offline"}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0 text-xs text-muted-foreground font-mono">
+                                {target.data?.hal_version ? `HAL ${target.data.hal_version}` : target.data?.client_version ? `Client ${target.data.client_version}` : "No version info"}
+                            </CardContent>
+                        </Card>
+                    </Link>
+                </section>
+            )}
 
             {/* ── Main layout ── */}
             <section className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">

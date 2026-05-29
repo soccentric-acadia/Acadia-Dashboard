@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
+import { cn, formatClock, formatDuration, formatRunDuration, resultVariant } from "@/lib/utils";
 import { Activity, ChevronDown, Settings2 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
@@ -25,11 +25,7 @@ import { parseSsePayload, openSse } from "@/lib/sse";
 import type { ExecutionMode, ModuleInfo, Run, RunEventState, TestResult } from "@/lib/types/api";
 import { useAppShell } from "@/state/app-shell-context";
 
-function formatClock(iso: string): string {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  return d.toLocaleTimeString();
-}
+
 
 function numericMetricFromResult(result: TestResult): number | null {
   const candidates = [result.monitoring, result.metrics, result.event];
@@ -116,20 +112,7 @@ function modeLabel(mode: ExecutionMode): string {
   return "Long-run";
 }
 
-function formatDuration(ns: number): string {
-  if (!ns) return "—";
-  if (ns < 1_000_000) return `${(ns / 1_000).toFixed(1)} µs`;
-  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(1)} ms`;
-  return `${(ns / 1_000_000_000).toFixed(2)} s`;
-}
 
-function resultVariant(status: string): "success" | "destructive" | "warning" | "secondary" {
-  const s = status?.toLowerCase() ?? "";
-  if (s.includes("pass")) return "success";
-  if (s.includes("fail") || s.includes("error")) return "destructive";
-  if (s.includes("warn")) return "warning";
-  return "secondary";
-}
 
 export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   const {
@@ -854,11 +837,11 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
               >
                 <div className="text-xs text-muted-foreground">Most recent one-shot</div>
                 <div className="mt-2 text-4xl font-bold">
-                  {viewLatest?.status ?? "No result"}
+                  {viewLatest ? (viewLatest.status.charAt(0).toUpperCase() + viewLatest.status.slice(1).toLowerCase()) : "No result"}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {viewLatest
-                    ? `${formatClock(viewLatest.timestamp)} · ${viewLatest.duration_ns} ns`
+                    ? `${formatClock(viewLatest.timestamp)} · ${formatDuration(viewLatest.duration_ns)}`
                     : "Waiting for run"}
                 </div>
               </div>
@@ -931,6 +914,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mode</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Status</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Created</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Duration</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -961,11 +945,12 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                           </Badge>
                         </td>
                         <td className="px-3 py-2">{formatClock(run.created_at)}</td>
+                        <td className="px-3 py-2">{formatRunDuration(run.started_at, run.ended_at)}</td>
                       </tr>
                     ))}
                     {moduleRuns.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-3 py-5 text-center text-muted-foreground">
+                        <td colSpan={5} className="px-3 py-5 text-center text-muted-foreground">
                           No runs yet.
                         </td>
                       </tr>

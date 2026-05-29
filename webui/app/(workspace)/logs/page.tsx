@@ -75,12 +75,19 @@ export default function LogsPage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <CardTitle>Logs</CardTitle>
-                            <CardDescription className="mt-1">Live tail plus server-side log history.</CardDescription>
+                            <CardDescription className="mt-1">Live tail plus server-side log history. <span className="font-medium text-foreground">{logs.length}</span> {logs.length === 1 ? "entry" : "entries"} shown.</CardDescription>
                         </div>
-                        <Button type="button" variant="outline" size="sm" onClick={() => setAutoScroll((value) => !value)}>
-                            {autoScroll ? <Pause size={14} /> : <Play size={14} />}
-                            {autoScroll ? "Pause auto-scroll" : "Resume auto-scroll"}
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {liveLogs.length > 0 && (
+                                <Button type="button" variant="ghost" size="sm" onClick={() => setLiveLogs([])}>
+                                    Clear live ({liveLogs.length})
+                                </Button>
+                            )}
+                            <Button type="button" variant="outline" size="sm" onClick={() => setAutoScroll((value) => !value)}>
+                                {autoScroll ? <Pause size={14} /> : <Play size={14} />}
+                                {autoScroll ? "Pause auto-scroll" : "Resume auto-scroll"}
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>

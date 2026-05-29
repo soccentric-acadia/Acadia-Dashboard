@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ChevronDown, ChevronLeft, ChevronRight, Cpu, FileText, HardDrive, LayoutDashboard, Network, RadioTower, Settings } from "lucide-react";
+import { Activity, Battery, Cable, ChevronDown, ChevronLeft, ChevronRight, Clock, Cpu, FileText, Gauge, HardDrive, History, LayoutDashboard, Monitor, Network, Settings, ShieldCheck, Zap } from "lucide-react";
 import { getModules } from "@/lib/api";
 import { modulesForOfflineDisplay, writeCachedModules } from "@/lib/modules/catalog";
 import type { ModuleInfo } from "@/lib/types/api";
@@ -72,8 +72,16 @@ export function Sidebar({
     const normalized = category.toLowerCase();
     if (normalized.includes("network")) return Network;
     if (normalized.includes("storage")) return HardDrive;
-    if (normalized.includes("sensor")) return Activity;
-    if (normalized.includes("bus")) return RadioTower;
+    if (normalized.includes("sensor")) return Gauge;
+    if (normalized.includes("serial") || normalized.includes("bus")) return Cable;
+    if (normalized.includes("media")) return Activity;
+    if (normalized.includes("safety")) return ShieldCheck;
+    if (normalized.includes("high_speed") || normalized.includes("high speed")) return Zap;
+    if (normalized.includes("system")) return Monitor;
+    if (normalized.includes("power")) return Battery;
+    if (normalized.includes("io")) return Monitor;
+    if (normalized.includes("timing")) return Clock;
+    if (normalized.includes("compute")) return Cpu;
     return Cpu;
   };
 
@@ -164,6 +172,22 @@ export function Sidebar({
               </div>
             </details>
           ))}
+
+          <Link
+            href={locked ? pathname : "/runs"}
+            onClick={(event) => {
+              if (locked) event.preventDefault();
+            }}
+            className={cn(
+              "mt-1 flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors",
+              pathname === "/runs"
+                ? "bg-accent text-accent-foreground font-medium"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+            )}
+          >
+            <History size={16} />
+            {!collapsed && "Run History"}
+          </Link>
 
           <Link
             href={locked ? pathname : "/logs"}
