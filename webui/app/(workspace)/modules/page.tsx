@@ -122,6 +122,16 @@ export default function ModulesIndexPage() {
         );
     }, [modules, search]);
 
+    const grouped = useMemo(() => {
+        const map = new Map<string, typeof filtered>();
+        for (const m of filtered) {
+            const cat = m.category || "other";
+            if (!map.has(cat)) map.set(cat, []);
+            map.get(cat)!.push(m);
+        }
+        return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    }, [filtered]);
+
     const enabledCount = useMemo(
         () => modules.filter((m) => moduleEnabled[m.id] !== false).length,
         [modules, moduleEnabled],
@@ -165,55 +175,70 @@ export default function ModulesIndexPage() {
                 </p>
             )}
 
-            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {isLoading && !modules.length && Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-44 animate-pulse rounded-xl bg-muted" />)}
-                {filtered.map((module) => {
-                    const enabled = moduleEnabled[module.id] !== false;
-                    const summary = moduleSummary[module.id] ?? null;
-                    return (
-                        <Card key={module.id} className={cn("h-full transition-colors", !enabled && "opacity-60")}>
-                            <CardHeader>
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                        <Badge variant="outline">{module.category || "Module"}</Badge>
-                                        {!enabled && <Badge variant="destructive">Disabled</Badge>}
-                                        {summary && (
-                                            <Badge variant={summary.anyFailed ? "destructive" : "success"}>
-                                                {summary.anyFailed ? "Test failed" : "Test passed"}
-                                            </Badge>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <Switch
-                                            checked={enabled}
-                                            onClick={(e) => { e.preventDefault(); toggleEnabled(module.id); }}
-                                            aria-label={enabled ? "Disable module" : "Enable module"}
-                                        />
-                                        <Link href={`/modules/${module.id}`} onClick={(e) => e.stopPropagation()}>
-                                            <ArrowRight size={16} className="text-muted-foreground hover:text-foreground" />
-                                        </Link>
-                                    </div>
-                                </div>
-                                <CardTitle>{module.name || module.id}</CardTitle>
-                                <CardDescription className="line-clamp-2">
-                                    {module.description || "No module description supplied by the server."}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-2 text-xs text-muted-foreground">
-                                <div className="flex justify-between gap-3"><span>Category</span><span className="text-foreground font-medium">{module.category || "n/a"}</span></div>
-                                <div className="flex justify-between gap-3"><span>Version</span><span>{module.version || "n/a"}</span></div>
-                                <div className="flex justify-between gap-3">
-                                    <span>Last test run</span>
-                                    <span>{summary ? formatRunTime(summary.lastRun) : "No runs yet"}</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    );
-                })}
-                {!isLoading && filtered.length === 0 && modules.length > 0 && (
-                    <div className="col-span-full py-10 text-center text-muted-foreground">No modules match &ldquo;{search}&rdquo;</div>
-                )}
-            </section>
+            {isLoading && !modules.length && (
+                <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                    {Array.from({ length: 10 }).map((_, index) => <div key={index} className="h-44 animate-pulse rounded-xl bg-muted" />)}
+                </section>
+            )}
+
+            {!isLoading && filtered.length === 0 && modules.length > 0 && (
+                <div className="py-10 text-center text-muted-foreground">No modules match &ldquo;{search}&rdquo;</div>
+            )}
+
+            <div className="space-y-8">
+                {grouped.map(([category, mods]) => (
+                    <section key={category}>
+                        <div className="mb-4 flex items-center gap-3">
+                            <span className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{category.replace(/_/g, " ")}</span>
+                            <Badge variant="secondary" className="rounded-full px-2 text-xs tabular-nums">{mods.length}</Badge>
+                            <span className="h-px flex-1 bg-border" />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                            {mods.map((module) => {
+                                const enabled = moduleEnabled[module.id] !== false;
+                                const summary = moduleSummary[module.id] ?? null;
+                                return (
+                                    <Card key={module.id} className={cn("h-full transition-colors", !enabled && "opacity-60")}>
+                                        <CardHeader>
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    {!enabled && <Badge variant="destructive">Disabled</Badge>}
+                                                    {summary && (
+                                                        <Badge variant={summary.anyFailed ? "destructive" : "success"}>
+                                                            {summary.anyFailed ? "Test failed" : "Test passed"}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <Switch
+                                                        checked={enabled}
+                                                        onClick={(e) => { e.preventDefault(); toggleEnabled(module.id); }}
+                                                        aria-label={enabled ? "Disable module" : "Enable module"}
+                                                    />
+                                                    <Link href={`/modules/${module.id}`} onClick={(e) => e.stopPropagation()}>
+                                                        <ArrowRight size={16} className="text-muted-foreground hover:text-foreground" />
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                            <CardTitle>{module.name || module.id}</CardTitle>
+                                            <CardDescription className="line-clamp-2">
+                                                {module.description || "No module description supplied by the server."}
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-2 text-xs text-muted-foreground">
+                                            <div className="flex justify-between gap-3"><span>Version</span><span>{module.version || "n/a"}</span></div>
+                                            <div className="flex justify-between gap-3">
+                                                <span>Last test run</span>
+                                                <span>{summary ? formatRunTime(summary.lastRun) : "No runs yet"}</span>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
+                        </div>
+                    </section>
+                ))}
+            </div>
         </div>
     );
 }
