@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Activity, ChevronDown, Settings2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -432,10 +432,9 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                     const latestResult = testLatestResult[test.id] ?? null;
 
                     return (
-                      <>
+                      <Fragment key={test.id}>
                         {/* ── Test row ── */}
                         <tr
-                          key={test.id}
                           className={cn(
                             "border-b border-border transition-colors",
                             modeCompatible ? "hover:bg-muted/50" : "opacity-50",
@@ -690,7 +689,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
 
