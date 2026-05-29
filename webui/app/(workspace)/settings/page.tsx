@@ -1,32 +1,101 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ChevronRight, Upload } from "lucide-react";
-import { useState } from "react";
-import { getHealth, getModules, getRetentionSettings, getTarget, updateRetentionSettings, uploadOtaArtifact } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChevronRight, RefreshCw, Trash2, Upload } from "lucide-react";
+import {
+    getHealth, getModules, getRetentionSettings, getTarget,
+    updateRetentionSettings, uploadOtaArtifact,
+} from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppShell } from "@/state/app-shell-context";
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+// ─── Primitives ───────────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            onClick={() => onChange(!checked)}
+            className={clsx(
+                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                checked ? "bg-primary" : "bg-input",
+            )}
+        >
+            <span className={clsx(
+                "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-sm transition-transform",
+                checked ? "translate-x-4" : "translate-x-0",
+            )} />
+        </button>
+    );
+}
+
+function Row({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
     return (
         <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 last:border-b-0">
-            <span className="text-sm text-muted-foreground">{label}</span>
-            <span className="text-right text-sm font-medium">{value}</span>
+            <div className="min-w-0">
+                <span className="text-sm text-muted-foreground">{label}</span>
+                {sub && <p className="mt-0.5 text-xs text-muted-foreground/60">{sub}</p>}
+            </div>
+            <div className="shrink-0 text-right text-sm font-medium">{value}</div>
         </div>
     );
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SelectRow({ label, value, onChange, children }: {
+    label: string; value: string; onChange: (v: string) => void; children: React.ReactNode;
+}) {
     return (
-        <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-                <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{title}</CardTitle>
+        <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 last:border-b-0">
+            <span className="text-sm text-muted-foreground">{label}</span>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+                {children}
+            </select>
+        </div>
+    );
+}
+
+function SectionCard({ title, description, children }: {
+    title: string; description?: string; children: React.ReactNode;
+}) {
+    return (
+        <Card className="self-start">
+            <CardHeader className="px-4 pb-2 pt-4">
+                <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</CardTitle>
+                {description && <CardDescription className="mt-0.5 text-xs">{description}</CardDescription>}
             </CardHeader>
             <CardContent className="p-0">{children}</CardContent>
         </Card>
     );
 }
+
+/** Persistent localStorage-backed preference hook */
+function usePref<T>(key: string, defaultValue: T): [T, (v: T) => void] {
+    const [value, setValue] = useState<T>(defaultValue);
+    useEffect(() => {
+        try {
+            const raw = window.localStorage.getItem(key);
+            if (raw !== null) setValue(JSON.parse(raw) as T);
+        } catch { /* ignore */ }
+    }, [key]);
+    const set = useCallback((v: T) => {
+        setValue(v);
+        try { window.localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ }
+    }, [key]);
+    return [value, set];
+}
+
+// ─── OTA Host ────────────────────────────────────────────────────────────────
 
 function OtaHostCard() {
     const steps = ["Uploading", "Verifying", "Applying", "Reloading"];
@@ -48,13 +117,13 @@ function OtaHostCard() {
     }
 
     return (
-        <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-                <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">OTA — Host</CardTitle>
+        <Card className="self-start">
+            <CardHeader className="px-4 pb-2 pt-4">
+                <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">OTA — Host</CardTitle>
+                <CardDescription className="mt-0.5 text-xs">Upload a host update bundle to apply a server-side update.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 pt-2">
-                <p className="text-xs text-muted-foreground">Upload a host update bundle to apply a server-side update.</p>
-                <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/40 p-5 text-center transition-colors hover:bg-muted/60">
+            <CardContent className="space-y-3 p-4">
+                <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/40 p-5 text-center transition-colors hover:bg-muted/60">
                     <Upload size={18} className="mb-2 text-muted-foreground" />
                     <span className="text-sm font-medium">Upload host bundle</span>
                     <span className="mt-1 text-xs text-muted-foreground">Click to browse or drag &amp; drop</span>
@@ -62,7 +131,9 @@ function OtaHostCard() {
                 </label>
                 <div className="grid grid-cols-2 gap-1.5">
                     {steps.map((step, i) => (
-                        <div key={step} className={clsx("rounded-lg border px-2 py-1.5 text-center text-xs", i <= activeStep ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-muted text-muted-foreground")}>{step}</div>
+                        <div key={step} className={clsx("rounded-lg border px-2 py-1.5 text-center text-xs",
+                            i <= activeStep ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-muted text-muted-foreground",
+                        )}>{step}</div>
                     ))}
                 </div>
                 {error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
@@ -76,6 +147,8 @@ function OtaHostCard() {
         </Card>
     );
 }
+
+// ─── OTA Device ──────────────────────────────────────────────────────────────
 
 function OtaDeviceCard() {
     const uploadSteps = ["Upload to server", "Transfer to device", "Landed in /tmp", "(Future) Trigger"];
@@ -102,18 +175,18 @@ function OtaDeviceCard() {
     }
 
     return (
-        <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-                <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">OTA — Device</CardTitle>
+        <Card className="self-start">
+            <CardHeader className="px-4 pb-2 pt-4">
+                <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">OTA — Device</CardTitle>
+                <CardDescription className="mt-0.5 text-xs">Push a firmware image to the connected target device.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 pt-2">
-                <p className="text-xs text-muted-foreground">Push a firmware image to the connected target device.</p>
+            <CardContent className="space-y-3 p-4">
                 <div className="inline-flex gap-0.5 rounded-lg border border-border bg-muted p-0.5">
                     <button type="button" onClick={() => setSource("upload")} className={clsx("rounded-md px-3 py-1.5 text-xs font-medium transition-colors", source === "upload" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>Upload image</button>
                     <button type="button" onClick={() => setSource("fetch")} className={clsx("rounded-md px-3 py-1.5 text-xs font-medium transition-colors", source === "fetch" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>Fetch from server</button>
                 </div>
                 {source === "upload" ? (
-                    <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/40 p-5 text-center transition-colors hover:bg-muted/60">
+                    <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/40 p-5 text-center transition-colors hover:bg-muted/60">
                         <Upload size={18} className="mb-2 text-muted-foreground" />
                         <span className="text-sm font-medium">Upload target image</span>
                         <span className="mt-1 text-xs text-muted-foreground">Server transfers image to device /tmp</span>
@@ -128,7 +201,11 @@ function OtaDeviceCard() {
                 )}
                 <div className="grid grid-cols-2 gap-1.5">
                     {uploadSteps.map((step, i) => (
-                        <div key={step} className={clsx("rounded-lg border px-2 py-1.5 text-xs", i <= activeStep && i < 3 ? "border-primary/50 bg-primary/10 text-primary" : i === 3 ? "border-border bg-muted/50 text-muted-foreground/50" : "border-border bg-muted text-muted-foreground")}>{step}</div>
+                        <div key={step} className={clsx("rounded-lg border px-2 py-1.5 text-xs",
+                            i <= activeStep && i < 3 ? "border-primary/50 bg-primary/10 text-primary"
+                                : i === 3 ? "border-border bg-muted/50 text-muted-foreground/50"
+                                    : "border-border bg-muted text-muted-foreground",
+                        )}>{step}</div>
                     ))}
                 </div>
                 {landedPath && <p className="rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-700 dark:text-green-300">Image on target at {landedPath}.</p>}
@@ -144,63 +221,244 @@ function OtaDeviceCard() {
     );
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function SettingsPage() {
     const { themeMode, setThemeMode } = useAppShell();
+
     const health = useQuery({ queryKey: ["health"], queryFn: getHealth, refetchInterval: 10_000 });
     const target = useQuery({ queryKey: ["target"], queryFn: getTarget, retry: 1 });
     const modules = useQuery({ queryKey: ["modules"], queryFn: getModules });
     const retention = useQuery({ queryKey: ["retention"], queryFn: getRetentionSettings });
 
+    // Latency ping
+    const [latency, setLatency] = useState<number | null>(null);
+    const measureLatency = useCallback(async () => {
+        const start = performance.now();
+        try { await getHealth(); setLatency(Math.round(performance.now() - start)); }
+        catch { setLatency(null); }
+    }, []);
+    useEffect(() => { void measureLatency(); }, [measureLatency]);
+
+    // Appearance prefs
+    const [density, setDensity] = usePref<"comfortable" | "compact">("acadia.prefs.density", "comfortable");
+    const [chartColors, setChartColors] = usePref<"default" | "pastel" | "high-contrast">("acadia.prefs.chartColors", "default");
+
+    // Behavior prefs
+    const [rollingWindow, setRollingWindow] = usePref<"1h" | "6h" | "24h">("acadia.prefs.rollingWindow", "6h");
+    const [autoScroll, setAutoScroll] = usePref<boolean>("acadia.prefs.autoScroll", true);
+    const [defaultMode, setDefaultMode] = usePref<string>("acadia.prefs.defaultMode", "single_shot");
+
+    // Notification prefs
+    const [notifyComplete, setNotifyComplete] = usePref<boolean>("acadia.prefs.notifyComplete", false);
+    const [notifyFail, setNotifyFail] = usePref<boolean>("acadia.prefs.notifyFail", false);
+    const notifPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
+    async function requestNotifPermission() {
+        if (typeof Notification !== "undefined" && Notification.permission === "default") {
+            await Notification.requestPermission();
+        }
+    }
+
+    // Data & retention
+    const [retentionDays, setRetentionDays] = useState(30);
+    const [maxResults, setMaxResults] = useState(10_000);
+    useEffect(() => {
+        if (retention.data) {
+            setRetentionDays(retention.data.retention_days);
+            setMaxResults(retention.data.max_run_results);
+        }
+    }, [retention.data]);
+    const [purgeStatus, setPurgeStatus] = useState<string | null>(null);
+    async function handlePurge() {
+        setPurgeStatus("Applying...");
+        try {
+            await updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults });
+            setPurgeStatus("Retention policy applied.");
+        } catch { setPurgeStatus("Failed to update retention."); }
+        setTimeout(() => setPurgeStatus(null), 3000);
+    }
+
+    // Module category breakdown
+    const categoryCounts = useMemo(() => {
+        const map: Record<string, number> = {};
+        for (const m of modules.data ?? []) {
+            const cat = m.category || "Uncategorized";
+            map[cat] = (map[cat] ?? 0) + 1;
+        }
+        return map;
+    }, [modules.data]);
+
+    // Parse server URL
+    const serverUrl = process.env.NEXT_PUBLIC_ACADIA_SERVER ?? "http://localhost:8080";
+    let serverPort = "—";
+    try { serverPort = new URL(serverUrl).port || (serverUrl.startsWith("https") ? "443" : "80"); }
+    catch { /* ignore */ }
+
     return (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <SectionCard title="Connection">
-                <Row label="Server address" value={process.env.NEXT_PUBLIC_ACADIA_SERVER ?? "http://localhost:8080"} />
-                <Row label="Status" value={health.isError ? "Offline" : (health.data?.status ?? "Checking")} />
-                <Row label="Version" value={health.data?.version ?? "Unavailable"} />
+        <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+
+            {/* ── 1. Server Connection ── */}
+            <SectionCard title="Server Connection">
+                <Row label="Address" value={<span className="font-mono text-xs">{serverUrl}</span>} />
+                <Row label="Port" value={serverPort} />
+                <Row label="Status" value={
+                    <Badge variant={health.isError ? "destructive" : health.data?.status === "ok" ? "success" : "secondary"}>
+                        {health.isError ? "Offline" : (health.data?.status ?? "Checking")}
+                    </Badge>
+                } />
+                <Row label="Latency" value={
+                    <span className="flex items-center gap-2">
+                        {latency !== null ? `${latency} ms` : "—"}
+                        <button type="button" onClick={() => void measureLatency()} title="Re-measure" className="text-muted-foreground transition-colors hover:text-foreground">
+                            <RefreshCw size={12} />
+                        </button>
+                    </span>
+                } />
+                <Row label="Server version" value={health.data?.version ?? "—"} />
             </SectionCard>
 
-            <SectionCard title="System">
+            {/* ── 2. System Info ── */}
+            <SectionCard title="System Info" description="Connected target identity and peripheral inventory.">
                 <Row label="Platform" value={target.data?.model ?? "Unknown"} />
-                <Row label="Hostname" value={target.data?.hostname ?? "Unavailable"} />
-                <Row label="Firmware" value={target.data?.client_version ?? "Unavailable"} />
-                <Row label="HAL" value={target.data?.hal_version ?? "Unavailable"} />
-                <Row label="Modules" value={`${modules.data?.length ?? 0}`} />
+                <Row label="Hostname" value={target.data?.hostname ?? "—"} />
+                <Row label="OS" value={target.data?.os_version ?? "—"} />
+                <Row label="HAL version" value={target.data?.hal_version ?? "—"} />
+                <Row label="Firmware" value={target.data?.client_version ?? "—"} />
+                <div className="border-t border-border px-4 py-3">
+                    <p className="mb-2 text-sm text-muted-foreground">Peripheral inventory</p>
+                    <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(categoryCounts).length > 0
+                            ? Object.entries(categoryCounts).map(([cat, count]) => (
+                                <Badge key={cat} variant="outline" className="text-xs">{cat} <span className="ml-1 opacity-60">{count}</span></Badge>
+                            ))
+                            : <span className="text-xs text-muted-foreground">No modules discovered</span>
+                        }
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">{modules.data?.length ?? 0} modules total</p>
+                </div>
             </SectionCard>
 
-            <SectionCard title="Preferences">
+            {/* ── 3. Appearance ── */}
+            <SectionCard title="Appearance">
+                <SelectRow label="Theme" value={themeMode} onChange={(v) => setThemeMode(v as "system" | "light" | "dark")}>
+                    <option value="system">System</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </SelectRow>
+                <SelectRow label="Table density" value={density} onChange={(v) => setDensity(v as "comfortable" | "compact")}>
+                    <option value="comfortable">Comfortable</option>
+                    <option value="compact">Compact</option>
+                </SelectRow>
+                <SelectRow label="Chart colors" value={chartColors} onChange={(v) => setChartColors(v as "default" | "pastel" | "high-contrast")}>
+                    <option value="default">Default</option>
+                    <option value="pastel">Pastel</option>
+                    <option value="high-contrast">High contrast</option>
+                </SelectRow>
+            </SectionCard>
+
+            {/* ── 4. Behavior ── */}
+            <SectionCard title="Behavior">
+                <SelectRow label="Rolling window" value={rollingWindow} onChange={(v) => setRollingWindow(v as "1h" | "6h" | "24h")}>
+                    <option value="1h">Last 1 hour</option>
+                    <option value="6h">Last 6 hours</option>
+                    <option value="24h">Last 24 hours</option>
+                </SelectRow>
+                <Row label="Log auto-scroll" value={<Toggle checked={autoScroll} onChange={setAutoScroll} />} />
+                <SelectRow label="Default mode" value={defaultMode} onChange={setDefaultMode}>
+                    <option value="single_shot">Single shot</option>
+                    <option value="monitoring">Monitoring</option>
+                    <option value="event">Event</option>
+                    <option value="long_run">Long run</option>
+                </SelectRow>
+            </SectionCard>
+
+            {/* ── 5. Operator ── */}
+            <SectionCard title="Operator" description="Auth not yet implemented — fields saved locally only.">
+                <Row label="Name" value={
+                    <input className="h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator name" placeholder="Your name" />
+                } />
+                <Row label="Email" value={
+                    <input type="email" className="h-9 w-36 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator email" placeholder="you@acme.com" />
+                } />
+                <Row label="Role" value={<span className="inline-flex items-center gap-1 text-muted-foreground">Unassigned <ChevronRight size={13} /></span>} />
+            </SectionCard>
+
+            {/* ── 6. Notifications ── */}
+            <SectionCard title="Notifications" description="Browser desktop notifications for test lifecycle events.">
+                {notifPermission === "denied" && (
+                    <div className="mx-4 mb-1 mt-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                        Notifications are blocked in browser settings.
+                    </div>
+                )}
                 <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
-                    <span className="text-sm text-muted-foreground">Appearance</span>
-                    <select
-                        value={themeMode}
-                        onChange={(e) => setThemeMode(e.target.value as "system" | "light" | "dark")}
-                        className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                        <option value="system">System</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                    </select>
+                    <div>
+                        <p className="text-sm text-muted-foreground">Test completion</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground/60">Notify when a run finishes</p>
+                    </div>
+                    <Toggle checked={notifyComplete} onChange={async (v) => { await requestNotifPermission(); setNotifyComplete(v); }} />
                 </div>
-                <Row label="Table density" value="Comfortable" />
-                <Row label="Log auto-scroll" value="Enabled" />
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div>
+                        <p className="text-sm text-muted-foreground">Test failure</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground/60">Notify on any failed result</p>
+                    </div>
+                    <Toggle checked={notifyFail} onChange={async (v) => { await requestNotifPermission(); setNotifyFail(v); }} />
+                </div>
+            </SectionCard>
+
+            {/* ── 7. Data & Retention ── */}
+            <SectionCard title="Data & Retention" description="How long run data and results are kept on the server.">
+                <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
                     <span className="text-sm text-muted-foreground">Retention days</span>
                     <input
-                        type="number"
-                        min={1}
-                        defaultValue={retention.data?.retention_days ?? 30}
-                        onBlur={(e) => void updateRetentionSettings({ retention_days: Number(e.target.value) })}
+                        type="number" min={1} value={retentionDays}
+                        onChange={(e) => setRetentionDays(Number(e.target.value))}
+                        onBlur={() => void updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults })}
                         className="h-9 w-24 rounded-md border border-input bg-transparent px-3 text-right text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
                 </div>
+                <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
+                    <div>
+                        <span className="text-sm text-muted-foreground">Max run results</span>
+                        <p className="mt-0.5 text-xs text-muted-foreground/60">Per-run result cap</p>
+                    </div>
+                    <input
+                        type="number" min={1} value={maxResults}
+                        onChange={(e) => setMaxResults(Number(e.target.value))}
+                        onBlur={() => void updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults })}
+                        className="h-9 w-24 rounded-md border border-input bg-transparent px-3 text-right text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div>
+                        <span className="text-sm text-muted-foreground">Purge old runs</span>
+                        <p className="mt-0.5 text-xs text-muted-foreground/60">Remove runs beyond retention limit</p>
+                    </div>
+                    <Button type="button" variant="destructive" size="sm" onClick={() => void handlePurge()}>
+                        <Trash2 size={13} className="mr-1" />Purge
+                    </Button>
+                </div>
+                {purgeStatus && <p className="px-4 pb-3 text-xs text-muted-foreground">{purgeStatus}</p>}
             </SectionCard>
 
-            <SectionCard title="Operator">
-                <Row label="Name" value={<input className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator name" />} />
-                <Row label="Email" value={<input type="email" className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="Operator email" />} />
-                <Row label="Role" value={<span className="inline-flex items-center gap-1 text-muted-foreground">Unassigned <ChevronRight size={14} /></span>} />
+            {/* ── 8. About ── */}
+            <SectionCard title="About">
+                <Row label="Web UI" value={process.env.NEXT_PUBLIC_APP_VERSION ?? "dev"} />
+                <Row label="Server" value={health.data?.version ?? "—"} />
+                <Row label="Client" value={target.data?.client_version ?? "—"} />
+                <Row label="HAL" value={target.data?.hal_version ?? "—"} />
+                <Row label="Build commit" value={
+                    process.env.NEXT_PUBLIC_BUILD_COMMIT
+                        ? <span className="font-mono text-xs">{process.env.NEXT_PUBLIC_BUILD_COMMIT.slice(0, 8)}</span>
+                        : "—"
+                } />
+                <Row label="Build date" value={process.env.NEXT_PUBLIC_BUILD_DATE ?? "—"} />
             </SectionCard>
 
+            {/* ── OTA Host ── */}
             <OtaHostCard />
+
+            {/* ── OTA Device ── */}
             <OtaDeviceCard />
         </div>
     );

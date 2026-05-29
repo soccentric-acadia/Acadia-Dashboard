@@ -184,7 +184,7 @@ export function Sidebar({
 
         <div className="border-t border-border p-2">
           <Link
-            href={locked ? pathname : "/settings/general"}
+            href={locked ? pathname : "/settings"}
             onClick={(event) => {
               if (locked) event.preventDefault();
             }}
