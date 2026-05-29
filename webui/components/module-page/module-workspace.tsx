@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { cn, formatClock, formatDuration, formatRunDuration, resultVariant } from "@/lib/utils";
+import { cn, formatClock, formatDuration, formatRunDuration, resultVariant, statusVariant } from "@/lib/utils";
 import { Activity, ChevronDown, Settings2 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
@@ -133,21 +133,11 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   const [testPlan, setTestPlan] = useState<TestPlanState>(() => initialTestPlan(module.id, moduleTests));
   const [moduleEnabled, setModuleEnabled] = useState<boolean>(() => loadModuleEnabled(module.id));
   const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set());
-  const [expandedStatusTests, setExpandedStatusTests] = useState<Set<string>>(new Set());
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
   const selectTest = (id: string) => setSelectedTestId((prev) => (prev === id ? null : id));
 
   const toggleExpand = (testId: string) => {
     setExpandedTests((prev) => {
-      const next = new Set(prev);
-      if (next.has(testId)) next.delete(testId);
-      else next.add(testId);
-      return next;
-    });
-  };
-
-  const toggleStatusExpand = (testId: string) => {
-    setExpandedStatusTests((prev) => {
       const next = new Set(prev);
       if (next.has(testId)) next.delete(testId);
       else next.add(testId);
@@ -373,595 +363,438 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
         </CardContent>
       </Card>
 
-      {/* ── Main two-column area ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_400px]">
+      {/* ── Reviewing run banner ─────────────────────────────────────── */}
+      {reviewingRunId && (
+        <div className="flex items-center justify-between rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
+          <span className="text-warning">
+            Reviewing run {reviewingRunId.slice(0, 8)}…
+          </span>
+          <button
+            type="button"
+            onClick={() => setReviewingRunId(null)}
+            className="rounded-md bg-warning px-3 py-1 text-xs font-semibold text-warning-foreground hover:bg-warning/90"
+          >
+            Return to live
+          </button>
+        </div>
+      )}
 
-        {/* ── HAL Tests table ─────────────────────────────────────────── */}
-        <Card className={cn(!moduleEnabled && "opacity-60 pointer-events-none")}>
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle>HAL Test Suite</CardTitle>
-              {!moduleEnabled ? (
-                <Badge variant="destructive">Module disabled — excluded from runs</Badge>
-              ) : (
-                <Badge variant={activeEnabledTests.length > 0 ? "success" : "destructive"}>
-                  {activeEnabledTests.length} enabled for {modeLabel(mode)}
-                </Badge>
-              )}
-            </div>
-            <CardDescription>
-              Toggle tests on/off, configure with ⚙, and inspect results with the <Activity size={12} className="inline" /> icon. Greyed rows are not available in the current global mode.
-            </CardDescription>
-          </CardHeader>
+      {/* ── HAL Tests table ─────────────────────────────────────────── */}
+      <Card className={cn(!moduleEnabled && "opacity-60 pointer-events-none")}>
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>HAL Test Suite</CardTitle>
+            {!moduleEnabled ? (
+              <Badge variant="destructive">Module disabled — excluded from runs</Badge>
+            ) : (
+              <Badge variant={activeEnabledTests.length > 0 ? "success" : "destructive"}>
+                {activeEnabledTests.length} enabled for {modeLabel(mode)}
+              </Badge>
+            )}
+          </div>
+          <CardDescription>
+            Toggle tests on/off and configure parameters with ⚙. Click any row to expand its results inline. Greyed rows are not in the current global mode.
+          </CardDescription>
+        </CardHeader>
 
-          <CardContent className="p-0">
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="w-[35%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Test
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Mode
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Last run
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Result
-                    </th>
-                    <th className="w-10 px-2 py-3" />
-                    <th className="w-10 px-2 py-3" />
-                    <th className="w-24 px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Enabled
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {moduleTests.map((test) => {
-                    const plan = testPlan[test.id];
-                    const enabled = plan?.enabled ?? true;
-                    const modeCompatible = test.modes.includes(mode);
-                    const isExpanded = expandedTests.has(test.id);
-                    const isStatusExpanded = expandedStatusTests.has(test.id);
-                    const hasFields = test.fields.length > 0;
-                    const locked = isRunning || !modeCompatible || !enabled;
-                    const latestResult = testLatestResult[test.id] ?? null;
+        <CardContent className="p-0">
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="w-[35%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Test
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Mode
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Last run
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Result
+                  </th>
+                  <th className="w-10 px-2 py-3" />
+                  <th className="w-24 px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Enabled
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {moduleTests.map((test) => {
+                  const plan = testPlan[test.id];
+                  const enabled = plan?.enabled ?? true;
+                  const modeCompatible = test.modes.includes(mode);
+                  const isExpanded = expandedTests.has(test.id);
+                  const hasFields = test.fields.length > 0;
+                  const locked = isRunning || !modeCompatible || !enabled;
+                  const latestResult = testLatestResult[test.id] ?? null;
 
-                    return (
-                      <Fragment key={test.id}>
-                        {/* ── Test row ── */}
-                        <tr
-                          className={cn(
-                            "border-b border-border transition-colors cursor-pointer select-none",
-                            selectedTestId === test.id
-                              ? "bg-accent"
-                              : modeCompatible
-                                ? "hover:bg-muted/50"
-                                : "opacity-50",
-                          )}
-                          onClick={() => selectTest(test.id)}
-                        >
-                          {/* Name + description */}
-                          <td className="px-4 py-3">
-                            <div className="font-semibold">{test.name}</div>
-                            <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                              {test.description}
-                            </div>
-                          </td>
+                  return (
+                    <Fragment key={test.id}>
+                      {/* ── Test row ── */}
+                      <tr
+                        className={cn(
+                          "border-b border-border transition-colors cursor-pointer select-none",
+                          selectedTestId === test.id
+                            ? "bg-accent"
+                            : modeCompatible
+                              ? "hover:bg-muted/50"
+                              : "opacity-50",
+                        )}
+                        onClick={() => selectTest(test.id)}
+                      >
+                        {/* Name + description */}
+                        <td className="px-4 py-3">
+                          <div className="font-semibold">{test.name}</div>
+                          <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                            {test.description}
+                          </div>
+                        </td>
 
-                          {/* Global mode compatibility */}
-                          <td className="px-4 py-3">
-                            <Badge variant={modeCompatible ? "success" : "secondary"}>
-                              {modeLabel(mode)}
+                        {/* Global mode compatibility */}
+                        <td className="px-4 py-3">
+                          <Badge variant={modeCompatible ? "success" : "secondary"}>
+                            {modeLabel(mode)}
+                          </Badge>
+                        </td>
+
+                        {/* Last run timestamp */}
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {latestResult ? formatClock(latestResult.timestamp) : "—"}
+                        </td>
+
+                        {/* Latest result badge */}
+                        <td className="px-4 py-3">
+                          {latestResult ? (
+                            <Badge variant={resultVariant(latestResult.status)}>
+                              {latestResult.status}
                             </Badge>
-                          </td>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
 
-                          {/* Last run timestamp */}
-                          <td className="px-4 py-3 text-xs text-muted-foreground">
-                            {latestResult ? formatClock(latestResult.timestamp) : "—"}
-                          </td>
+                        {/* Config expand */}
+                        <td className="px-2 py-3">
+                          {hasFields && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleExpand(test.id); }}
+                              title="Configure test parameters"
+                              className={cn(
+                                "rounded-md p-1.5 transition-colors",
+                                isExpanded
+                                  ? "bg-accent text-accent-foreground"
+                                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                              )}
+                            >
+                              <Settings2 size={15} />
+                            </button>
+                          )}
+                        </td>
 
-                          {/* Latest result badge */}
-                          <td className="px-4 py-3">
-                            {latestResult ? (
-                              <Badge variant={resultVariant(latestResult.status)}>
-                                {latestResult.status}
-                              </Badge>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
+                        {/* Enable/disable switch */}
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {enabled ? "On" : "Off"}
+                            </span>
+                            <Switch
+                              checked={enabled}
+                              disabled={isRunning}
+                              onClick={(e) => { e.stopPropagation(); setTestEnabled(test.id, !enabled); }}
+                              aria-label={`${enabled ? "Disable" : "Enable"} ${test.name}`}
+                            />
+                          </div>
+                        </td>
+                      </tr>
 
-                          {/* Config expand */}
-                          <td className="px-2 py-3">
-                            {hasFields && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleExpand(test.id); }}
-                                title="Configure test parameters"
-                                className={cn(
-                                  "rounded-md p-1.5 transition-colors",
-                                  isExpanded
-                                    ? "bg-accent text-accent-foreground"
-                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                                )}
-                              >
-                                <Settings2 size={15} />
-                              </button>
-                            )}
-                          </td>
-
-                          {/* Status detail expand */}
-                          <td className="px-2 py-3">
-                            {latestResult && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleStatusExpand(test.id); }}
-                                title="View result details"
-                                className={cn(
-                                  "rounded-md p-1.5 transition-colors",
-                                  isStatusExpanded
-                                    ? "bg-accent text-accent-foreground"
-                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                                )}
-                              >
-                                <Activity size={15} />
-                              </button>
-                            )}
-                          </td>
-
-                          {/* Enable/disable switch */}
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="text-xs text-muted-foreground">
-                                {enabled ? "On" : "Off"}
+                      {/* ── Expanded config row ── */}
+                      {isExpanded && hasFields && (
+                        <tr
+                          key={`${test.id}-config`}
+                          className="border-b border-border bg-muted/30"
+                        >
+                          <td colSpan={6} className="px-6 pb-4 pt-3">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Settings2 size={13} className="text-muted-foreground" />
+                              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Configuration — {test.name}
                               </span>
-                              <Switch
-                                checked={enabled}
-                                disabled={isRunning}
-                                onClick={(e) => { e.stopPropagation(); setTestEnabled(test.id, !enabled); }}
-                                aria-label={`${enabled ? "Disable" : "Enable"} ${test.name}`}
-                              />
+                              <button
+                                type="button"
+                                onClick={() => toggleExpand(test.id)}
+                                className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                <ChevronDown size={14} />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                              {test.fields.map((field) => {
+                                const value = plan?.fields[field.key] ?? field.defaultValue;
+                                return (
+                                  <label
+                                    key={field.key}
+                                    className="block text-xs font-medium text-foreground"
+                                  >
+                                    <span className="mb-1 flex items-center justify-between gap-2">
+                                      <span>{field.label}</span>
+                                      {field.unit && (
+                                        <span className="text-muted-foreground">{field.unit}</span>
+                                      )}
+                                    </span>
+                                    {field.type === "select" ? (
+                                      <select
+                                        disabled={locked}
+                                        value={String(value)}
+                                        onChange={(e) =>
+                                          setFieldValue(test.id, field, e.target.value)
+                                        }
+                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                                      >
+                                        {(field.options ?? []).map((option) => (
+                                          <option key={option} value={option}>
+                                            {option}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : field.type === "boolean" ? (
+                                      <div className="flex h-9 items-center justify-between rounded-md border border-input bg-transparent px-3">
+                                        <span>{value ? "Enabled" : "Disabled"}</span>
+                                        <Switch
+                                          checked={Boolean(value)}
+                                          disabled={locked}
+                                          onClick={() =>
+                                            setFieldValue(test.id, field, !value)
+                                          }
+                                          aria-label={field.label}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <Input
+                                        disabled={locked}
+                                        type={field.type === "number" ? "number" : "text"}
+                                        value={String(value)}
+                                        onChange={(e) =>
+                                          setFieldValue(
+                                            test.id,
+                                            field,
+                                            field.type === "number"
+                                              ? Number(e.target.value)
+                                              : e.target.value,
+                                          )
+                                        }
+                                      />
+                                    )}
+                                  </label>
+                                );
+                              })}
                             </div>
                           </td>
                         </tr>
+                      )}
 
-                        {/* ── Expanded config row ── */}
-                        {isExpanded && hasFields && (
-                          <tr
-                            key={`${test.id}-config`}
-                            className="border-b border-border bg-muted/30"
-                          >
-                            <td colSpan={7} className="px-6 pb-4 pt-3">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Settings2 size={13} className="text-muted-foreground" />
-                                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                  Configuration — {test.name}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleExpand(test.id)}
-                                  className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-                                >
-                                  <ChevronDown size={14} />
-                                </button>
-                              </div>
-                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                                {test.fields.map((field) => {
-                                  const value = plan?.fields[field.key] ?? field.defaultValue;
-                                  return (
-                                    <label
-                                      key={field.key}
-                                      className="block text-xs font-medium text-foreground"
-                                    >
-                                      <span className="mb-1 flex items-center justify-between gap-2">
-                                        <span>{field.label}</span>
-                                        {field.unit && (
-                                          <span className="text-muted-foreground">{field.unit}</span>
-                                        )}
-                                      </span>
-                                      {field.type === "select" ? (
-                                        <select
-                                          disabled={locked}
-                                          value={String(value)}
-                                          onChange={(e) =>
-                                            setFieldValue(test.id, field, e.target.value)
-                                          }
-                                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-                                        >
-                                          {(field.options ?? []).map((option) => (
-                                            <option key={option} value={option}>
-                                              {option}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      ) : field.type === "boolean" ? (
-                                        <div className="flex h-9 items-center justify-between rounded-md border border-input bg-transparent px-3">
-                                          <span>{value ? "Enabled" : "Disabled"}</span>
-                                          <Switch
-                                            checked={Boolean(value)}
-                                            disabled={locked}
-                                            onClick={() =>
-                                              setFieldValue(test.id, field, !value)
-                                            }
-                                            aria-label={field.label}
-                                          />
-                                        </div>
-                                      ) : (
-                                        <Input
-                                          disabled={locked}
-                                          type={field.type === "number" ? "number" : "text"}
-                                          value={String(value)}
-                                          onChange={(e) =>
-                                            setFieldValue(
-                                              test.id,
-                                              field,
-                                              field.type === "number"
-                                                ? Number(e.target.value)
-                                                : e.target.value,
-                                            )
-                                          }
-                                        />
-                                      )}
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-
-                        {/* ── Expanded status detail row ── */}
-                        {isStatusExpanded && latestResult && (
-                          <tr
-                            key={`${test.id}-status`}
-                            className="border-b border-border bg-muted/20"
-                          >
-                            <td colSpan={7} className="px-6 pb-4 pt-3">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Activity size={13} className="text-muted-foreground" />
-                                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                  Result detail — {test.name}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleStatusExpand(test.id)}
-                                  className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-                                >
-                                  <ChevronDown size={14} />
-                                </button>
-                              </div>
-                              <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs sm:grid-cols-3 lg:grid-cols-4">
-                                <div>
-                                  <div className="text-muted-foreground">Status</div>
-                                  <Badge variant={resultVariant(latestResult.status)} className="mt-1">
-                                    {latestResult.status}
-                                  </Badge>
-                                </div>
-                                <div>
-                                  <div className="text-muted-foreground">Time</div>
-                                  <div className="mt-1 font-medium">{formatClock(latestResult.timestamp)}</div>
-                                </div>
-                                <div>
-                                  <div className="text-muted-foreground">Duration</div>
-                                  <div className="mt-1 font-medium">{formatDuration(latestResult.duration_ns)}</div>
-                                </div>
-                                <div>
-                                  <div className="text-muted-foreground">Severity</div>
-                                  <div className="mt-1 font-medium">{latestResult.severity || "—"}</div>
-                                </div>
-                                {latestResult.error_message && (
-                                  <div className="col-span-2 sm:col-span-3 lg:col-span-4">
-                                    <div className="text-muted-foreground">Error</div>
-                                    <div className="mt-1 font-mono text-destructive">{latestResult.error_message}</div>
-                                  </div>
-                                )}
-                                {Object.keys(latestResult.metrics ?? {}).length > 0 && (
-                                  <div className="col-span-2 sm:col-span-3 lg:col-span-4">
-                                    <div className="mb-1 text-muted-foreground">Metrics</div>
-                                    <div className="flex flex-wrap gap-3">
-                                      {Object.entries(latestResult.metrics).map(([k, v]) => (
-                                        <span key={k} className="text-xs"><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {Object.keys(latestResult.monitoring ?? {}).length > 0 && (
-                                  <div className="col-span-2 sm:col-span-3 lg:col-span-4">
-                                    <div className="mb-1 text-muted-foreground">Monitoring</div>
-                                    <div className="flex flex-wrap gap-3">
-                                      {Object.entries(latestResult.monitoring).map(([k, v]) => (
-                                        <span key={k} className="text-xs"><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {Object.keys(latestResult.event ?? {}).length > 0 && (
-                                  <div className="col-span-2 sm:col-span-3 lg:col-span-4">
-                                    <div className="mb-1 text-muted-foreground">Events</div>
-                                    <div className="flex flex-wrap gap-3">
-                                      {Object.entries(latestResult.event).map(([k, v]) => (
-                                        <span key={k} className="text-xs"><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-
-                  {moduleTests.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
-                        No tests available for this module.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ── Results panel ────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-4">
-          {reviewingRunId && (
-            <div className="flex items-center justify-between rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
-              <span className="text-warning">
-                Reviewing run {reviewingRunId.slice(0, 8)}…
-              </span>
-              <button
-                type="button"
-                onClick={() => setReviewingRunId(null)}
-                className="rounded-md bg-warning px-3 py-1 text-xs font-semibold text-warning-foreground hover:bg-warning/90"
-              >
-                Return to live
-              </button>
-            </div>
-          )}
-
-          <Card className="flex flex-col gap-3 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold truncate">
-                  {selectedTestId
-                    ? (moduleTests.find((t) => t.id === selectedTestId)?.name ?? selectedTestId)
-                    : "Results"}
-                </p>
-                {selectedTestId && (
-                  <p className="text-xs text-muted-foreground">Click row again to deselect</p>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {selectedTestId && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTestId(null)}
-                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-                  >
-                    Show all
-                  </button>
-                )}
-                <Badge variant={isRunning ? "warning" : "secondary"}>
-                  {viewResults.length} {selectedTestId ? "result" : "sample"}{viewResults.length !== 1 ? "s" : ""}
-                </Badge>
-              </div>
-            </div>
-
-            {/* Selected test latest result detail */}
-            {selectedTestId && viewLatest && (
-              <div className={cn(
-                "rounded-lg border p-3 text-xs",
-                resultVariant(viewLatest.status) === "success"
-                  ? "border-success/40 bg-success/10"
-                  : resultVariant(viewLatest.status) === "destructive"
-                    ? "border-destructive/40 bg-destructive/10"
-                    : "border-border bg-muted/30",
-              )}>
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <Badge variant={resultVariant(viewLatest.status)}>{viewLatest.status}</Badge>
-                  <span className="text-muted-foreground">{formatClock(viewLatest.timestamp)}</span>
-                  <span className="text-muted-foreground">{formatDuration(viewLatest.duration_ns)}</span>
-                  {viewLatest.severity && <span className="text-muted-foreground">sev: {viewLatest.severity}</span>}
-                </div>
-                {viewLatest.error_message && (
-                  <div className="mb-2 font-mono text-destructive break-all">{viewLatest.error_message}</div>
-                )}
-                {Object.keys(viewLatest.metrics ?? {}).length > 0 && (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1">
-                    {Object.entries(viewLatest.metrics).map(([k, v]) => (
-                      <span key={k}><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
-                    ))}
-                  </div>
-                )}
-                {Object.keys(viewLatest.monitoring ?? {}).length > 0 && (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                    {Object.entries(viewLatest.monitoring).map(([k, v]) => (
-                      <span key={k}><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
-                    ))}
-                  </div>
-                )}
-                {Object.keys(viewLatest.event ?? {}).length > 0 && (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                    {Object.entries(viewLatest.event).map(([k, v]) => (
-                      <span key={k}><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Chart (monitoring / long_run) */}
-            {(mode === "monitoring" || mode === "long_run") && (
-              <div className="h-56 w-full rounded-lg border border-border bg-background p-2">
-                {viewChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={viewChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#64748b33" />
-                      <XAxis dataKey="t" minTickGap={24} tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#0ea5e9"
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="grid h-full place-items-center text-sm text-muted-foreground">
-                    No numeric samples yet.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Single-shot big result */}
-            {mode === "single_shot" && (
-              <div
-                className={cn(
-                  "rounded-lg border p-4 text-center",
-                  viewLatest?.status?.toLowerCase() === "pass"
-                    ? "border-success/50 bg-success/10"
-                    : "border-destructive/50 bg-destructive/10",
-                )}
-              >
-                <div className="text-xs text-muted-foreground">Most recent one-shot</div>
-                <div className="mt-2 text-4xl font-bold">
-                  {viewLatest ? (viewLatest.status.charAt(0).toUpperCase() + viewLatest.status.slice(1).toLowerCase()) : "No result"}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {viewLatest
-                    ? `${formatClock(viewLatest.timestamp)} · ${formatDuration(viewLatest.duration_ns)}`
-                    : "Waiting for run"}
-                </div>
-              </div>
-            )}
-
-            {/* Live results mini-table */}
-            <div className="overflow-auto rounded-lg border border-border">
-              <table className="min-w-full text-xs">
-                <thead className="sticky top-0 bg-muted">
-                  <tr>
-                    <th className="px-2 py-2 text-left">Time</th>
-                    <th className="px-2 py-2 text-left">Status</th>
-                    <th className="px-2 py-2 text-left">Test</th>
-                    <th className="px-2 py-2 text-left">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewResults.slice(0, 200).map((row) => (
-                    <tr
-                      key={row.id + String(row.sequence)}
-                      className="border-t border-border"
-                    >
-                      <td className="px-2 py-1.5">{formatClock(row.timestamp)}</td>
-                      <td className="px-2 py-1.5">
-                        <Badge
-                          variant={
-                            row.status?.toLowerCase() === "pass"
-                              ? "success"
-                              : row.status?.toLowerCase() === "fail"
-                                ? "destructive"
-                                : "secondary"
-                          }
+                      {/* ── Expanded results row ── */}
+                      {selectedTestId === test.id && (
+                        <tr
+                          key={`${test.id}-results`}
+                          className="border-b border-border bg-muted/10"
                         >
-                          {row.status}
-                        </Badge>
-                      </td>
-                      <td className="px-2 py-1.5">{row.name || row.test_id}</td>
-                      <td className="px-2 py-1.5">
-                        {String(numericMetricFromResult(row) ?? "—")}
-                      </td>
-                    </tr>
-                  ))}
-                  {viewResults.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">
-                        No results yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+                          <td colSpan={6} className="px-6 pb-6 pt-4">
+                            <div className="flex items-center gap-2 mb-4">
+                              <Activity size={13} className="text-muted-foreground" />
+                              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Results — {test.name}
+                              </span>
+                              <Badge variant={isRunning ? "warning" : "secondary"} className="text-xs">
+                                {viewResults.length} {viewResults.length !== 1 ? "samples" : "sample"}
+                              </Badge>
+                              <button
+                                type="button"
+                                onClick={() => selectTest(test.id)}
+                                className="ml-auto text-muted-foreground hover:text-foreground"
+                              >
+                                <ChevronDown size={14} />
+                              </button>
+                            </div>
 
-          {/* Previous runs */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Previous Runs</CardTitle>
-              <CardDescription className="text-xs">
-                Click a row to review stored results.
-              </CardDescription>
-            </CardHeader>
-            <Separator />
-            <CardContent className="p-0">
-              <div className="overflow-auto">
-                <table className="min-w-full text-xs">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Run ID</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mode</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Status</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Created</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {moduleRuns.map((run: Run) => (
-                      <tr
-                        key={run.id}
-                        className={cn(
-                          "cursor-pointer border-t border-border transition-colors hover:bg-muted/50",
-                          reviewingRunId === run.id && "bg-warning/10",
-                        )}
-                        onClick={() => setReviewingRunId(run.id)}
-                      >
-                        <td className="px-3 py-2 font-mono">{run.id.slice(0, 8)}…</td>
-                        <td className="px-3 py-2">{run.mode}</td>
-                        <td className="px-3 py-2">
-                          <Badge
-                            variant={
-                              run.status?.toLowerCase() === "pass"
-                                ? "success"
-                                : run.status?.toLowerCase() === "fail"
-                                  ? "destructive"
-                                  : run.status?.toLowerCase() === "running"
-                                    ? "warning"
-                                    : "secondary"
-                            }
-                          >
-                            {run.status}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2">{formatClock(run.created_at)}</td>
-                        <td className="px-3 py-2">{formatRunDuration(run.started_at, run.ended_at)}</td>
-                      </tr>
-                    ))}
-                    {moduleRuns.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-3 py-5 text-center text-muted-foreground">
-                          No runs yet.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                            {/* Latest result detail */}
+                            {viewLatest && (
+                              <div className={cn(
+                                "mb-4 rounded-lg border p-3 text-xs",
+                                resultVariant(viewLatest.status) === "success"
+                                  ? "border-success/40 bg-success/10"
+                                  : resultVariant(viewLatest.status) === "destructive"
+                                    ? "border-destructive/40 bg-destructive/10"
+                                    : "border-border bg-muted/30",
+                              )}>
+                                <div className="mb-2 flex flex-wrap items-center gap-2">
+                                  <Badge variant={resultVariant(viewLatest.status)}>{viewLatest.status}</Badge>
+                                  <span className="text-muted-foreground">{formatClock(viewLatest.timestamp)}</span>
+                                  <span className="text-muted-foreground">{formatDuration(viewLatest.duration_ns)}</span>
+                                  {viewLatest.severity && <span className="text-muted-foreground">sev: {viewLatest.severity}</span>}
+                                </div>
+                                {viewLatest.error_message && (
+                                  <div className="mb-2 font-mono text-destructive break-all">{viewLatest.error_message}</div>
+                                )}
+                                {Object.keys(viewLatest.metrics ?? {}).length > 0 && (
+                                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                    {Object.entries(viewLatest.metrics).map(([k, v]) => (
+                                      <span key={k}><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
+                                    ))}
+                                  </div>
+                                )}
+                                {Object.keys(viewLatest.monitoring ?? {}).length > 0 && (
+                                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                    {Object.entries(viewLatest.monitoring).map(([k, v]) => (
+                                      <span key={k}><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
+                                    ))}
+                                  </div>
+                                )}
+                                {Object.keys(viewLatest.event ?? {}).length > 0 && (
+                                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                    {Object.entries(viewLatest.event).map(([k, v]) => (
+                                      <span key={k}><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Chart (monitoring / long_run) */}
+                            {(mode === "monitoring" || mode === "long_run") && (
+                              <div className="mb-4 h-48 w-full rounded-lg border border-border bg-background p-2">
+                                {viewChartData.length > 0 ? (
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={viewChartData}>
+                                      <CartesianGrid strokeDasharray="3 3" stroke="#64748b33" />
+                                      <XAxis dataKey="t" minTickGap={24} tick={{ fontSize: 10 }} />
+                                      <YAxis tick={{ fontSize: 10 }} />
+                                      <Tooltip />
+                                      <Legend />
+                                      <Line type="monotone" dataKey="value" stroke="#0ea5e9" dot={false} isAnimationActive={false} />
+                                    </LineChart>
+                                  </ResponsiveContainer>
+                                ) : (
+                                  <div className="grid h-full place-items-center text-sm text-muted-foreground">No numeric samples yet.</div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Single-shot result */}
+                            {mode === "single_shot" && viewLatest && (
+                              <div className={cn(
+                                "mb-4 rounded-lg border p-3 text-center",
+                                viewLatest.status?.toLowerCase() === "pass"
+                                  ? "border-success/50 bg-success/10"
+                                  : "border-destructive/50 bg-destructive/10",
+                              )}>
+                                <div className="text-xs text-muted-foreground">Most recent one-shot</div>
+                                <div className="mt-1 text-3xl font-bold">
+                                  {viewLatest.status.charAt(0).toUpperCase() + viewLatest.status.slice(1).toLowerCase()}
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {formatClock(viewLatest.timestamp)} · {formatDuration(viewLatest.duration_ns)}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Results mini-table */}
+                            <div className="mb-4 overflow-auto rounded-lg border border-border">
+                              <table className="min-w-full text-xs">
+                                <thead className="sticky top-0 bg-muted">
+                                  <tr>
+                                    <th className="px-2 py-2 text-left">Time</th>
+                                    <th className="px-2 py-2 text-left">Status</th>
+                                    <th className="px-2 py-2 text-left">Test</th>
+                                    <th className="px-2 py-2 text-left">Value</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {viewResults.slice(0, 200).map((row) => (
+                                    <tr key={row.id + String(row.sequence)} className="border-t border-border">
+                                      <td className="px-2 py-1.5">{formatClock(row.timestamp)}</td>
+                                      <td className="px-2 py-1.5">
+                                        <Badge variant={resultVariant(row.status)}>{row.status}</Badge>
+                                      </td>
+                                      <td className="px-2 py-1.5">{row.name || row.test_id}</td>
+                                      <td className="px-2 py-1.5">{String(numericMetricFromResult(row) ?? "—")}</td>
+                                    </tr>
+                                  ))}
+                                  {viewResults.length === 0 && (
+                                    <tr>
+                                      <td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">No results yet.</td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Previous Runs */}
+                            <div>
+                              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Previous Runs
+                              </div>
+                              <div className="overflow-auto rounded-lg border border-border">
+                                <table className="min-w-full text-xs">
+                                  <thead className="bg-muted/50">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Run ID</th>
+                                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mode</th>
+                                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Status</th>
+                                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Created</th>
+                                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Duration</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {moduleRuns.map((run: Run) => (
+                                      <tr
+                                        key={run.id}
+                                        className={cn(
+                                          "cursor-pointer border-t border-border transition-colors hover:bg-muted/50",
+                                          reviewingRunId === run.id && "bg-warning/10",
+                                        )}
+                                        onClick={() => setReviewingRunId(run.id)}
+                                      >
+                                        <td className="px-3 py-2 font-mono">{run.id.slice(0, 8)}…</td>
+                                        <td className="px-3 py-2">{run.mode}</td>
+                                        <td className="px-3 py-2">
+                                          <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
+                                        </td>
+                                        <td className="px-3 py-2">{formatClock(run.created_at)}</td>
+                                        <td className="px-3 py-2">{formatRunDuration(run.started_at, run.ended_at)}</td>
+                                      </tr>
+                                    ))}
+                                    {moduleRuns.length === 0 && (
+                                      <tr>
+                                        <td colSpan={5} className="px-3 py-5 text-center text-muted-foreground">No runs yet.</td>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+
+                {moduleTests.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                      No tests available for this module.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
