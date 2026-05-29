@@ -9,6 +9,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { getHealth } from "@/lib/api";
 import type { ExecutionMode, ModuleRunSelection } from "@/lib/types/api";
 
 interface AppShellState {
@@ -28,6 +30,7 @@ interface AppShellState {
   setActiveModuleSelection: (selection: ModuleRunSelection | null) => void;
   registerModuleSearchFocus: (focusFn: (() => void) | null) => void;
   focusModuleSearch: () => void;
+  serverOnline: boolean | null;
 }
 
 const AppShellContext = createContext<AppShellState | null>(null);
@@ -54,6 +57,18 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
   });
   const [activeModuleSelection, setActiveModuleSelection] = useState<ModuleRunSelection | null>(null);
   const [moduleSearchFocusFn, setModuleSearchFocusFn] = useState<(() => void) | null>(null);
+
+  const { data: healthData, isError: healthError } = useQuery({
+    queryKey: ["health"],
+    queryFn: getHealth,
+    refetchInterval: 10_000,
+    retry: 0,
+  });
+  const serverOnline: boolean | null = healthData
+    ? !healthError && healthData.status === "ok"
+    : healthError
+      ? false
+      : null;
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_KEY, String(sidebarCollapsed));
@@ -109,6 +124,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       setActiveModuleSelection,
       registerModuleSearchFocus,
       focusModuleSearch,
+      serverOnline,
     }),
     [
       mode,
@@ -120,6 +136,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       activeModuleSelection,
       registerModuleSearchFocus,
       focusModuleSearch,
+      serverOnline,
     ],
   );
 

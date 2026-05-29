@@ -141,6 +141,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
     setIsRunning,
     setActiveRunId,
     setActiveModuleSelection,
+    serverOnline,
   } = useAppShell();
 
   const [liveResults, setLiveResults] = useState<TestResult[]>([]);
@@ -173,6 +174,8 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
     queryKey: ["runs", module.id],
     queryFn: () => getRuns({ limit: 40 }),
     refetchInterval: 15_000,
+    enabled: serverOnline !== false,
+    retry: 0,
   });
 
   const moduleRuns = useMemo(() => {
@@ -186,8 +189,9 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   const { data: selectedResultsData, refetch: refetchResults } = useQuery({
     queryKey: ["run-results", selectedRunId, module.id],
     queryFn: () => getRunResults(selectedRunId as string, { moduleId: module.id, limit: 500 }),
-    enabled: Boolean(selectedRunId),
+    enabled: Boolean(selectedRunId) && serverOnline !== false,
     refetchInterval: isRunning ? 5000 : false,
+    retry: 0,
   });
 
   useEffect(() => {

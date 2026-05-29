@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getHealth } from "@/lib/api";
 import type { ExecutionMode } from "@/lib/types/api";
 import { ConnectionIndicator } from "@/components/chrome/connection-indicator";
 import { ModeSwitcher } from "@/components/chrome/mode-switcher";
 import { StartStopButton } from "@/components/chrome/start-stop-button";
 import { Separator } from "@/components/ui/separator";
+import { useAppShell } from "@/state/app-shell-context";
 
 function formatElapsed(seconds: number): string {
   const minutes = Math.floor(seconds / 60)
@@ -32,12 +31,8 @@ export function TopBar({
   runningSince: number | null;
   onStartStop: () => void;
 }) {
+  const { serverOnline } = useAppShell();
   const [now, setNow] = useState(() => Date.now());
-  const { data, isError } = useQuery({
-    queryKey: ["health"],
-    queryFn: getHealth,
-    refetchInterval: 10_000,
-  });
 
   useEffect(() => {
     if (!runningSince) return;
@@ -58,7 +53,7 @@ export function TopBar({
       <div className="flex items-center gap-3">
         <StartStopButton isRunning={isRunning} elapsedLabel={elapsedLabel} onClick={onStartStop} />
         <Separator orientation="vertical" className="h-5" />
-        <ConnectionIndicator online={!isError && data?.status === "ok"} />
+        <ConnectionIndicator online={serverOnline === true} />
       </div>
     </header>
   );
