@@ -10,8 +10,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { getModules } from "@/lib/api";
+import { getModules, getRuns, getRunResults } from "@/lib/api";
 import { modulesForOfflineDisplay, writeCachedModules } from "@/lib/modules/catalog";
+
+interface ModuleSummary {
+    lastRun: string; // ISO timestamp of the most recent test result
+    anyFailed: boolean;
+}
+
+function formatRunTime(iso: string): string {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
 
 const MODULE_ENABLED_PREFIX = "acadia.module-enabled.";
 
@@ -37,6 +52,44 @@ export default function ModulesIndexPage() {
     }, [liveModules]);
 
     const modules = useMemo(() => modulesForOfflineDisplay(liveModules), [liveModules]);
+
+    // Fetch recent runs to find the latest completed one
+    const { data: runsData } = useQuery({
+        queryKey: ["runs", "modules-index"],
+        queryFn: () => getRuns({ limit: 20 }),
+        refetchInterval: 30_000,
+    });
+
+    const latestRun = useMemo(() => {
+        return runsData?.runs?.find((r) => {
+            const s = r.status?.toLowerCase() ?? "";
+            return s.includes("complete") || s.includes("pass") || s.includes("fail") || s.includes("error");
+        }) ?? runsData?.runs?.[0] ?? null;
+    }, [runsData]);
+
+    // Fetch all results for that run (no module filter) to build per-module summaries
+    const { data: latestResultsData } = useQuery({
+        queryKey: ["run-results-all", latestRun?.id],
+        queryFn: () => getRunResults(latestRun!.id, { limit: 2000 }),
+        enabled: Boolean(latestRun?.id),
+    });
+
+    const moduleSummary = useMemo((): Record<string, ModuleSummary> => {
+        if (!latestResultsData?.results) return {};
+        const map: Record<string, ModuleSummary> = {};
+        for (const result of latestResultsData.results) {
+            const mid = result.module_id;
+            if (!mid) continue;
+            const failed = result.status?.toLowerCase().includes("fail") || result.status?.toLowerCase().includes("error");
+            if (!map[mid]) {
+                map[mid] = { lastRun: result.timestamp, anyFailed: failed };
+            } else {
+                if (failed) map[mid].anyFailed = true;
+                if (result.timestamp > map[mid].lastRun) map[mid].lastRun = result.timestamp;
+            }
+        }
+        return map;
+    }, [latestResultsData]);
 
     const [search, setSearch] = useState("");
     const [moduleEnabled, setModuleEnabled] = useState<Record<string, boolean>>({});
@@ -116,6 +169,7 @@ export default function ModulesIndexPage() {
                 {isLoading && !modules.length && Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-44 animate-pulse rounded-xl bg-muted" />)}
                 {filtered.map((module) => {
                     const enabled = moduleEnabled[module.id] !== false;
+                    const summary = moduleSummary[module.id] ?? null;
                     return (
                         <Card key={module.id} className={cn("h-full transition-colors", !enabled && "opacity-60")}>
                             <CardHeader>
@@ -123,6 +177,11 @@ export default function ModulesIndexPage() {
                                     <div className="flex flex-wrap items-center gap-1.5">
                                         <Badge variant="outline">{module.category || "Module"}</Badge>
                                         {!enabled && <Badge variant="destructive">Disabled</Badge>}
+                                        {summary && (
+                                            <Badge variant={summary.anyFailed ? "destructive" : "success"}>
+                                                {summary.anyFailed ? "Test failed" : "Test passed"}
+                                            </Badge>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         <Switch
@@ -136,13 +195,17 @@ export default function ModulesIndexPage() {
                                     </div>
                                 </div>
                                 <CardTitle>{module.name || module.id}</CardTitle>
-                                <CardDescription className="line-clamp-3">{module.description || "No module description supplied by the server."}</CardDescription>
+                                <CardDescription className="line-clamp-2">
+                                    {module.description || "No module description supplied by the server."}
+                                </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2 text-xs text-muted-foreground">
-                                <div className="flex justify-between gap-3"><span>ID</span><span className="font-mono">{module.id}</span></div>
+                                <div className="flex justify-between gap-3"><span>Category</span><span className="text-foreground font-medium">{module.category || "n/a"}</span></div>
                                 <div className="flex justify-between gap-3"><span>Version</span><span>{module.version || "n/a"}</span></div>
-                                <div className="truncate"><span className="font-medium text-foreground">Config:</span> {module.config_type_url || "Not reported"}</div>
-                                <div className="truncate"><span className="font-medium text-foreground">Result:</span> {module.result_type_url || "Not reported"}</div>
+                                <div className="flex justify-between gap-3">
+                                    <span>Last test run</span>
+                                    <span>{summary ? formatRunTime(summary.lastRun) : "No runs yet"}</span>
+                                </div>
                             </CardContent>
                         </Card>
                     );

@@ -82,8 +82,6 @@ export default function DashboardPage() {
                                     <TableHead>Module</TableHead>
                                     <TableHead>Category</TableHead>
                                     <TableHead>Version</TableHead>
-                                    <TableHead>Config type</TableHead>
-                                    <TableHead>Result type</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -92,8 +90,6 @@ export default function DashboardPage() {
                                         <TableCell><Link href={`/modules/${module.id}`} className="font-semibold text-primary hover:underline">{module.name || module.id}</Link><div className="text-xs text-muted-foreground">{module.id}</div></TableCell>
                                         <TableCell><Badge variant="outline">{module.category || "Module"}</Badge></TableCell>
                                         <TableCell>{module.version || "n/a"}</TableCell>
-                                        <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">{module.config_type_url || "Not reported"}</TableCell>
-                                        <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">{module.result_type_url || "Not reported"}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
