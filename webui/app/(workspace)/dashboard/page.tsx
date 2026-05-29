@@ -14,6 +14,31 @@ import { getGlobalLogs, getModules, getRuns, getRunResults, getTarget } from "@/
 import { modulesForOfflineDisplay, testsForModule, writeCachedModules } from "@/lib/modules/catalog";
 import { statusVariant } from "@/lib/utils";
 import { useAppShell } from "@/state/app-shell-context";
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    Legend,
+    Pie,
+    PieChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from "recharts";
+
+const CHART_COLORS: Record<string, string> = {
+    pass: "#16a34a",
+    fail: "#dc2626",
+    running: "#d97706",
+    default: "#94a3b8",
+};
+const RESULT_PIE_COLORS: Record<string, string> = {
+    Pass: "#16a34a",
+    Fail: "#dc2626",
+    Other: "#94a3b8",
+};
 
 export default function DashboardPage() {
     const { serverOnline } = useAppShell();
@@ -77,6 +102,42 @@ export default function DashboardPage() {
         }
         return map;
     }, [latestResultsData]);
+
+    const resultBreakdown = useMemo(() => {
+        if (!runResultStats) return null;
+        const other = runResultStats.total - runResultStats.pass - runResultStats.fail;
+        return [
+            { name: "Pass", value: runResultStats.pass },
+            { name: "Fail", value: runResultStats.fail },
+            ...(other > 0 ? [{ name: "Other", value: other }] : []),
+        ].filter((d) => d.value > 0);
+    }, [runResultStats]);
+
+    const runHistoryBars = useMemo(
+        () =>
+            (runs.data?.runs ?? [])
+                .slice(0, 15)
+                .reverse()
+                .map((run, i) => ({
+                    i: i + 1,
+                    value: 1,
+                    status: run.status?.toLowerCase() ?? "unknown",
+                    label: new Date(run.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+                })),
+        [runs.data],
+    );
+
+    const moduleCategoryDist = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const m of modules) {
+            const cat = m.category || "other";
+            counts[cat] = (counts[cat] ?? 0) + 1;
+        }
+        return Object.entries(counts)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 8);
+    }, [modules]);
 
     const PAGE_SIZE = 10;
     const [inventoryPage, setInventoryPage] = useState(0);
@@ -189,6 +250,108 @@ export default function DashboardPage() {
                     </Link>
                 </section>
             )}
+
+            {/* ── Charts row ── */}
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {/* Latest Run Results — Donut */}
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-semibold">Latest Run Results</CardTitle>
+                        <CardDescription className="text-xs">Pass / fail breakdown from the most recent run</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {resultBreakdown ? (
+                            <ResponsiveContainer width="100%" height={180}>
+                                <PieChart>
+                                    <Pie
+                                        data={resultBreakdown}
+                                        cx="50%"
+                                        cy="45%"
+                                        innerRadius={46}
+                                        outerRadius={72}
+                                        paddingAngle={3}
+                                        dataKey="value"
+                                    >
+                                        {resultBreakdown.map((entry) => (
+                                            <Cell key={entry.name} fill={RESULT_PIE_COLORS[entry.name] ?? "#94a3b8"} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="grid h-44 place-items-center text-sm text-muted-foreground">No result data yet.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Recent Runs Timeline */}
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-semibold">Recent Runs</CardTitle>
+                        <CardDescription className="text-xs">Status of last {runHistoryBars.length} runs (newest right)</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {runHistoryBars.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={180}>
+                                <BarChart data={runHistoryBars} barSize={14} barGap={3}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#64748b22" vertical={false} />
+                                    <XAxis dataKey="label" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
+                                    <YAxis hide domain={[0, 1.2]} />
+                                    <Tooltip
+                                        content={({ active, payload }) => {
+                                            if (!active || !payload?.length) return null;
+                                            const d = payload[0].payload as { label: string; status: string };
+                                            return (
+                                                <div className="rounded-lg border bg-background px-3 py-2 text-xs shadow-lg">
+                                                    <div className="font-medium">{d.label}</div>
+                                                    <div className="capitalize text-muted-foreground">{d.status}</div>
+                                                </div>
+                                            );
+                                        }}
+                                    />
+                                    <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                                        {runHistoryBars.map((entry) => (
+                                            <Cell key={entry.i} fill={CHART_COLORS[entry.status] ?? CHART_COLORS.default} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="grid h-44 place-items-center text-sm text-muted-foreground">No run history yet.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Module Category Breakdown */}
+                <Card className="md:col-span-2 xl:col-span-1">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-semibold">Module Categories</CardTitle>
+                        <CardDescription className="text-xs">Modules per category</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {moduleCategoryDist.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={180}>
+                                <BarChart
+                                    data={moduleCategoryDist}
+                                    layout="vertical"
+                                    barSize={12}
+                                    margin={{ top: 0, right: 16, bottom: 0, left: 0 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#64748b22" horizontal={false} />
+                                    <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={76} />
+                                    <Tooltip formatter={(v) => [v, "modules"]} />
+                                    <Bar dataKey="count" fill="#6366f1" radius={[0, 3, 3, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="grid h-44 place-items-center text-sm text-muted-foreground">No module data yet.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </section>
 
             {/* ── Main layout ── */}
             <section className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">

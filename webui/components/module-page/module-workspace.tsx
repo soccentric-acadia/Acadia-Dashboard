@@ -516,7 +516,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                           key={`${test.id}-config`}
                           className="border-b border-border bg-muted/30"
                         >
-                          <td colSpan={6} className="px-6 pb-4 pt-3">
+                          <td colSpan={6} className="px-6 pb-4 pt-3 animate-expand-down">
                             <div className="flex items-center gap-2 mb-3">
                               <Settings2 size={13} className="text-muted-foreground" />
                               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -527,7 +527,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                                 onClick={() => toggleExpand(test.id)}
                                 className="ml-auto text-xs text-muted-foreground hover:text-foreground"
                               >
-                                <ChevronDown size={14} />
+                                <ChevronDown size={14} className="rotate-180 transition-transform duration-200" />
                               </button>
                             </div>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -601,7 +601,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                           key={`${test.id}-results`}
                           className="border-b border-border bg-muted/10"
                         >
-                          <td colSpan={6} className="px-6 pb-6 pt-4">
+                          <td colSpan={6} className="px-6 pb-6 pt-4 animate-expand-down">
                             <div className="flex items-center gap-2 mb-4">
                               <Activity size={13} className="text-muted-foreground" />
                               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -615,7 +615,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                                 onClick={() => selectTest(test.id)}
                                 className="ml-auto text-muted-foreground hover:text-foreground"
                               >
-                                <ChevronDown size={14} />
+                                <ChevronDown size={14} className="rotate-180 transition-transform duration-200" />
                               </button>
                             </div>
 

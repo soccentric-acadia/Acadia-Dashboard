@@ -152,7 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
 
       {runError && (
-        <div className="sticky top-14 z-20 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+        <div className="sticky top-14 z-20 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive md:top-14">
           {runError}
         </div>
       )}
