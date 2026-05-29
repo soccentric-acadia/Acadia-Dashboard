@@ -151,6 +151,8 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   const [moduleEnabled, setModuleEnabled] = useState<boolean>(() => loadModuleEnabled(module.id));
   const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set());
   const [expandedStatusTests, setExpandedStatusTests] = useState<Set<string>>(new Set());
+  const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
+  const selectTest = (id: string) => setSelectedTestId((prev) => (prev === id ? null : id));
 
   const toggleExpand = (testId: string) => {
     setExpandedTests((prev) => {
@@ -324,6 +326,19 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
 
   const latest = mergedResults[0];
 
+  const viewResults = useMemo(() => {
+    if (!selectedTestId) return mergedResults;
+    return mergedResults.filter((r) => r.test_id === selectedTestId);
+  }, [mergedResults, selectedTestId]);
+
+  const viewChartData = useMemo(() => {
+    const all = toChartRows(viewResults);
+    if (mode !== "monitoring" && mode !== "long_run") return all;
+    return all.filter((row) => now - row.ts <= 60_000);
+  }, [viewResults, mode, now]);
+
+  const viewLatest = viewResults[0] ?? null;
+
   const runningStatus = isRunning
     ? `Running in ${mode} · ${mergedResults.length} samples`
     : `Idle · Last run ${moduleRuns[0] ? formatClock(moduleRuns[0].created_at) : "never"}`;
@@ -436,9 +451,14 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                         {/* ── Test row ── */}
                         <tr
                           className={cn(
-                            "border-b border-border transition-colors",
-                            modeCompatible ? "hover:bg-muted/50" : "opacity-50",
+                            "border-b border-border transition-colors cursor-pointer select-none",
+                            selectedTestId === test.id
+                              ? "bg-accent"
+                              : modeCompatible
+                                ? "hover:bg-muted/50"
+                                : "opacity-50",
                           )}
+                          onClick={() => selectTest(test.id)}
                         >
                           {/* Name + description */}
                           <td className="px-4 py-3">
@@ -476,7 +496,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                             {hasFields && (
                               <button
                                 type="button"
-                                onClick={() => toggleExpand(test.id)}
+                                onClick={(e) => { e.stopPropagation(); toggleExpand(test.id); }}
                                 title="Configure test parameters"
                                 className={cn(
                                   "rounded-md p-1.5 transition-colors",
@@ -495,7 +515,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                             {latestResult && (
                               <button
                                 type="button"
-                                onClick={() => toggleStatusExpand(test.id)}
+                                onClick={(e) => { e.stopPropagation(); toggleStatusExpand(test.id); }}
                                 title="View result details"
                                 className={cn(
                                   "rounded-md p-1.5 transition-colors",
@@ -518,7 +538,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                               <Switch
                                 checked={enabled}
                                 disabled={isRunning}
-                                onClick={() => setTestEnabled(test.id, !enabled)}
+                                onClick={(e) => { e.stopPropagation(); setTestEnabled(test.id, !enabled); }}
                                 aria-label={`${enabled ? "Disable" : "Enable"} ${test.name}`}
                               />
                             </div>
@@ -724,21 +744,82 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
           )}
 
           <Card className="flex flex-col gap-3 p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold">
-                Results
-              </span>
-              <Badge variant={isRunning ? "warning" : "secondary"}>
-                {mergedResults.length} samples
-              </Badge>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">
+                  {selectedTestId
+                    ? (moduleTests.find((t) => t.id === selectedTestId)?.name ?? selectedTestId)
+                    : "Results"}
+                </p>
+                {selectedTestId && (
+                  <p className="text-xs text-muted-foreground">Click row again to deselect</p>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {selectedTestId && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTestId(null)}
+                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  >
+                    Show all
+                  </button>
+                )}
+                <Badge variant={isRunning ? "warning" : "secondary"}>
+                  {viewResults.length} {selectedTestId ? "result" : "sample"}{viewResults.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
             </div>
+
+            {/* Selected test latest result detail */}
+            {selectedTestId && viewLatest && (
+              <div className={cn(
+                "rounded-lg border p-3 text-xs",
+                resultVariant(viewLatest.status) === "success"
+                  ? "border-success/40 bg-success/10"
+                  : resultVariant(viewLatest.status) === "destructive"
+                    ? "border-destructive/40 bg-destructive/10"
+                    : "border-border bg-muted/30",
+              )}>
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <Badge variant={resultVariant(viewLatest.status)}>{viewLatest.status}</Badge>
+                  <span className="text-muted-foreground">{formatClock(viewLatest.timestamp)}</span>
+                  <span className="text-muted-foreground">{formatDuration(viewLatest.duration_ns)}</span>
+                  {viewLatest.severity && <span className="text-muted-foreground">sev: {viewLatest.severity}</span>}
+                </div>
+                {viewLatest.error_message && (
+                  <div className="mb-2 font-mono text-destructive break-all">{viewLatest.error_message}</div>
+                )}
+                {Object.keys(viewLatest.metrics ?? {}).length > 0 && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {Object.entries(viewLatest.metrics).map(([k, v]) => (
+                      <span key={k}><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
+                    ))}
+                  </div>
+                )}
+                {Object.keys(viewLatest.monitoring ?? {}).length > 0 && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                    {Object.entries(viewLatest.monitoring).map(([k, v]) => (
+                      <span key={k}><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
+                    ))}
+                  </div>
+                )}
+                {Object.keys(viewLatest.event ?? {}).length > 0 && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                    {Object.entries(viewLatest.event).map(([k, v]) => (
+                      <span key={k}><span className="text-muted-foreground">{k}:</span> <span className="font-mono font-medium">{String(v)}</span></span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Chart (monitoring / long_run) */}
             {(mode === "monitoring" || mode === "long_run") && (
               <div className="h-56 w-full rounded-lg border border-border bg-background p-2">
-                {chartData.length > 0 ? (
+                {viewChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData}>
+                    <LineChart data={viewChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#64748b33" />
                       <XAxis dataKey="t" minTickGap={24} tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} />
@@ -766,18 +847,18 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
               <div
                 className={cn(
                   "rounded-lg border p-4 text-center",
-                  latest?.status?.toLowerCase() === "pass"
+                  viewLatest?.status?.toLowerCase() === "pass"
                     ? "border-success/50 bg-success/10"
                     : "border-destructive/50 bg-destructive/10",
                 )}
               >
                 <div className="text-xs text-muted-foreground">Most recent one-shot</div>
                 <div className="mt-2 text-4xl font-bold">
-                  {latest?.status ?? "No result"}
+                  {viewLatest?.status ?? "No result"}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {latest
-                    ? `${formatClock(latest.timestamp)} · ${latest.duration_ns} ns`
+                  {viewLatest
+                    ? `${formatClock(viewLatest.timestamp)} · ${viewLatest.duration_ns} ns`
                     : "Waiting for run"}
                 </div>
               </div>
@@ -795,7 +876,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {mergedResults.slice(0, 200).map((row) => (
+                  {viewResults.slice(0, 200).map((row) => (
                     <tr
                       key={row.id + String(row.sequence)}
                       className="border-t border-border"
@@ -820,7 +901,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                       </td>
                     </tr>
                   ))}
-                  {mergedResults.length === 0 && (
+                  {viewResults.length === 0 && (
                     <tr>
                       <td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">
                         No results yet.
