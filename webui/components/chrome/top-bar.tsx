@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Boxes, History, Settings, Zap } from "lucide-react";
+import { LayoutDashboard, Boxes, History, Settings, Zap, Bot, BarChart2 } from "lucide-react";
 import type { ExecutionMode } from "@/lib/types/api";
 import { cn } from "@/lib/utils";
 import { ConnectionIndicator } from "@/components/chrome/connection-indicator";
@@ -23,6 +23,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/modules", label: "Modules", icon: Boxes },
   { href: "/runs", label: "Run History", icon: History },
+  { href: "/ai-llm", label: "AI/LLM", icon: Bot },
+  { href: "/reporting", label: "Reporting", icon: BarChart2 },
   { href: "/settings", label: "Settings", icon: Settings, matchPrefix: "/settings" },
 ];
 
