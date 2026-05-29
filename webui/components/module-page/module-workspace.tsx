@@ -134,7 +134,6 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   const [testPlan, setTestPlan] = useState<TestPlanState>(() => initialTestPlan(module.id, moduleTests));
   const [moduleEnabled, setModuleEnabled] = useState<boolean>(() => loadModuleEnabled(module.id));
   const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set());
-  const [modeFilter, setModeFilter] = useState<"all" | ExecutionMode>("all");
 
   const toggleExpand = (testId: string) => {
     setExpandedTests((prev) => {
@@ -144,11 +143,6 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
       return next;
     });
   };
-
-  const filteredTests = useMemo(() => {
-    if (modeFilter === "all") return moduleTests;
-    return moduleTests.filter((t) => t.modes.includes(modeFilter));
-  }, [moduleTests, modeFilter]);
 
   const { data: runsData } = useQuery({
     queryKey: ["runs", module.id],
@@ -316,7 +310,11 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
                 {module.description || "No description was reported for this module."}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground/70">{runningStatus}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                <span><span className="font-medium text-foreground">ID</span> <span className="font-mono">{module.id}</span></span>
+                <span><span className="font-medium text-foreground">Version</span> {module.version || "n/a"}</span>
+                <span>{runningStatus}</span>
+              </div>
             </div>
 
             {/* Module enable/disable */}
@@ -331,29 +329,6 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
               <span className={cn("text-xs font-semibold", moduleEnabled ? "text-success" : "text-destructive")}>
                 {moduleEnabled ? "Enabled" : "Disabled"}
               </span>
-            </div>
-
-            {/* Right: metadata tiles */}
-            <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
-              {[
-                { label: "Peripheral ID", value: module.id, mono: true },
-                { label: "Version", value: module.version || "n/a", mono: false },
-                { label: "Config type", value: module.config_type_url || "—", mono: true },
-                { label: "Result type", value: module.result_type_url || "—", mono: true },
-              ].map(({ label, value, mono }) => (
-                <div key={label} className="rounded-lg bg-muted px-3 py-3">
-                  <div className="text-xs text-muted-foreground">{label}</div>
-                  <div
-                    className={cn(
-                      "mt-1 truncate text-xs font-semibold",
-                      mono && "font-mono",
-                    )}
-                    title={value}
-                  >
-                    {value}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </CardContent>
@@ -378,25 +353,6 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
             <CardDescription>
               Toggle tests on/off with the switch. Use ⚙ to configure per-test parameters. Greyed rows are not available in the current global mode.
             </CardDescription>
-
-            {/* Mode filter pills */}
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {(["all", "single_shot", "monitoring", "event", "long_run"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setModeFilter(m)}
-                  className={cn(
-                    "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                    modeFilter === m
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  )}
-                >
-                  {m === "all" ? "All modes" : modeLabel(m as ExecutionMode)}
-                </button>
-              ))}
-            </div>
           </CardHeader>
 
           <CardContent className="p-0">
@@ -417,7 +373,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTests.map((test) => {
+                  {moduleTests.map((test) => {
                     const plan = testPlan[test.id];
                     const enabled = plan?.enabled ?? true;
                     const modeCompatible = test.modes.includes(mode);
@@ -589,7 +545,7 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
                     );
                   })}
 
-                  {filteredTests.length === 0 && (
+                  {moduleTests.length === 0 && (
                     <tr>
                       <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
                         No tests available for this filter.
