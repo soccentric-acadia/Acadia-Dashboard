@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Cpu, FileText, FlaskConical, RadioTower, Server, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import { useAppShell } from "@/state/app-shell-context";
 
 export default function DashboardPage() {
     const { serverOnline } = useAppShell();
+    const router = useRouter();
     const target = useQuery({ queryKey: ["target"], queryFn: getTarget, retry: 1, refetchInterval: 15_000 });
     const liveModules = useQuery({ queryKey: ["modules"], queryFn: getModules });
     const runs = useQuery({ queryKey: ["runs", "dashboard"], queryFn: () => getRuns({ limit: 20 }), refetchInterval: 15_000, enabled: serverOnline !== false });
@@ -119,7 +121,13 @@ export default function DashboardPage() {
                             <CardContent className="pt-0 text-xs text-muted-foreground">
                                 <span className="text-success font-medium">{enabledModuleCount} enabled</span>
                                 {" · "}
-                                <Link href="/modules?filter=disabled" onClick={(e) => e.stopPropagation()} className={modules.length - enabledModuleCount > 0 ? "text-destructive font-medium hover:underline" : ""}>{modules.length - enabledModuleCount} disabled</Link>
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push("/modules?filter=disabled"); }}
+                                    className={modules.length - enabledModuleCount > 0 ? "text-destructive font-medium hover:underline" : ""}
+                                >
+                                    {modules.length - enabledModuleCount} disabled
+                                </button>
                             </CardContent>
                         </Card>
                     </Link>
@@ -152,7 +160,13 @@ export default function DashboardPage() {
                                     <span>
                                         <span className="text-success font-medium">{runResultStats.pass} passed</span>
                                         {" · "}
-                                        <Link href="/modules?filter=failed" onClick={(e) => e.stopPropagation()} className={runResultStats.fail > 0 ? "text-destructive font-medium hover:underline" : "text-muted-foreground"}>{runResultStats.fail} failed</Link>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push("/modules?filter=failed"); }}
+                                            className={runResultStats.fail > 0 ? "text-destructive font-medium hover:underline" : "text-muted-foreground"}
+                                        >
+                                            {runResultStats.fail} failed
+                                        </button>
                                         <span className="text-muted-foreground"> of {runResultStats.total}</span>
                                     </span>
                                 ) : (
