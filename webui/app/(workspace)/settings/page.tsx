@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppShell } from "@/state/app-shell-context";
+import { PLATFORM_SLUG } from "@/lib/platform";
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
 
@@ -244,19 +245,19 @@ export default function SettingsPage() {
     });
 
     // Appearance prefs
-    const [density, setDensity] = usePref<"comfortable" | "compact">("acadia.prefs.density", "comfortable");
-    const [chartColors, setChartColors] = usePref<"default" | "pastel" | "high-contrast">("acadia.prefs.chartColors", "default");
+    const [density, setDensity] = usePref<"comfortable" | "compact">(`${PLATFORM_SLUG}.prefs.density`, "comfortable");
+    const [chartColors, setChartColors] = usePref<"default" | "pastel" | "high-contrast">(`${PLATFORM_SLUG}.prefs.chartColors`, "default");
 
     // Behavior prefs
-    const [rollingWindow, setRollingWindow] = usePref<"1h" | "6h" | "24h">("acadia.prefs.rollingWindow", "6h");
-    const [autoScroll, setAutoScroll] = usePref<boolean>("acadia.prefs.autoScroll", true);
-    const [defaultMode, setDefaultMode] = usePref<string>("acadia.prefs.defaultMode", "single_shot");
+    const [rollingWindow, setRollingWindow] = usePref<"1h" | "6h" | "24h">(`${PLATFORM_SLUG}.prefs.rollingWindow`, "6h");
+    const [autoScroll, setAutoScroll] = usePref<boolean>(`${PLATFORM_SLUG}.prefs.autoScroll`, true);
+    const [defaultMode, setDefaultMode] = usePref<string>(`${PLATFORM_SLUG}.prefs.defaultMode`, "single_shot");
 
     // Notification prefs
-    const [notifyComplete, setNotifyComplete] = usePref<boolean>("acadia.prefs.notifyComplete", false);
-    const [notifyFail, setNotifyFail] = usePref<boolean>("acadia.prefs.notifyFail", false);
-    const [operatorName, setOperatorName] = usePref<string>("acadia.prefs.operatorName", "");
-    const [operatorEmail, setOperatorEmail] = usePref<string>("acadia.prefs.operatorEmail", "");
+    const [notifyComplete, setNotifyComplete] = usePref<boolean>(`${PLATFORM_SLUG}.prefs.notifyComplete`, false);
+    const [notifyFail, setNotifyFail] = usePref<boolean>(`${PLATFORM_SLUG}.prefs.notifyFail`, false);
+    const [operatorName, setOperatorName] = usePref<string>(`${PLATFORM_SLUG}.prefs.operatorName`, "");
+    const [operatorEmail, setOperatorEmail] = usePref<string>(`${PLATFORM_SLUG}.prefs.operatorEmail`, "");
     const notifPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
     async function requestNotifPermission() {
         if (typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -290,7 +291,7 @@ export default function SettingsPage() {
     }, [modules.data]);
 
     // Parse server URL
-    const serverUrl = process.env.NEXT_PUBLIC_ACADIA_SERVER ?? "http://localhost:8080";
+    const serverUrl = process.env.NEXT_PUBLIC_PLATFORM_SERVER ?? "http://localhost:8080";
     let serverPort = "—";
     try { serverPort = new URL(serverUrl).port || (serverUrl.startsWith("https") ? "443" : "80"); }
     catch { /* ignore */ }

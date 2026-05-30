@@ -1,4 +1,5 @@
 import { HAL_MODULE_CATALOG } from "@/lib/modules/hal-derived-catalog";
+import { PLATFORM_SLUG } from "@/lib/platform";
 import type { ExecutionMode, ModuleInfo } from "@/lib/types/api";
 
 export type TestFieldType = "boolean" | "number" | "text" | "select";
@@ -20,7 +21,7 @@ export interface ModuleTestDefinition {
     fields: ModuleTestField[];
 }
 
-export const MODULE_CACHE_KEY = "acadia.modules.catalog";
+export const MODULE_CACHE_KEY = `${PLATFORM_SLUG}.modules.catalog`;
 
 export const FALLBACK_MODULES: ModuleInfo[] = HAL_MODULE_CATALOG.map((module) => ({
     id: module.id,

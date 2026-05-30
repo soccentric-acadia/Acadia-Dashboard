@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getHealth } from "@/lib/api";
+import { PLATFORM_SLUG } from "@/lib/platform";
 import type { ExecutionMode, ModuleRunSelection } from "@/lib/types/api";
 
 interface AppShellState {
@@ -35,9 +36,9 @@ interface AppShellState {
 
 const AppShellContext = createContext<AppShellState | null>(null);
 
-const SIDEBAR_KEY = "acadia.sidebar.collapsed";
-const THEME_KEY = "acadia.theme.mode";
-const DEFAULT_MODE_KEY = "acadia.prefs.defaultMode";
+const SIDEBAR_KEY = `${PLATFORM_SLUG}.sidebar.collapsed`;
+const THEME_KEY = `${PLATFORM_SLUG}.theme.mode`;
+const DEFAULT_MODE_KEY = `${PLATFORM_SLUG}.prefs.defaultMode`;
 
 function readDefaultMode(): ExecutionMode {
   if (typeof window === "undefined") return "single_shot";

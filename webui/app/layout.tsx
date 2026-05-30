@@ -13,8 +13,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const PLATFORM_NAME = process.env.NEXT_PUBLIC_PLATFORM_NAME ?? "Acadia";
+
 export const metadata: Metadata = {
-  title: "Acadia IV&V Console",
+  title: `${PLATFORM_NAME} IV&V Console`,
   description: "Operator console for SiliconCentric IV&V validation runs",
 };
 

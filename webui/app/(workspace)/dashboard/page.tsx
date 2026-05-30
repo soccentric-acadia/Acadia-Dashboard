@@ -14,6 +14,7 @@ import { getGlobalLogs, getModules, getRuns, getRunResults, getTarget } from "@/
 import { modulesForOfflineDisplay, testsForModule, writeCachedModules } from "@/lib/modules/catalog";
 import { statusVariant } from "@/lib/utils";
 import { useAppShell } from "@/state/app-shell-context";
+import { PLATFORM_SLUG } from "@/lib/platform";
 import {
     Bar,
     BarChart,
@@ -55,8 +56,8 @@ const CHART_COLOR_PREFS = {
 function readChartPrefs() {
     if (typeof window === "undefined") return { colors: CHART_COLOR_PREFS.default, rollingWindowHours: 6 };
     try {
-        const chartColors = JSON.parse(window.localStorage.getItem("acadia.prefs.chartColors") ?? "\"default\"") as keyof typeof CHART_COLOR_PREFS;
-        const rollingWindow = JSON.parse(window.localStorage.getItem("acadia.prefs.rollingWindow") ?? "\"6h\"") as string;
+        const chartColors = JSON.parse(window.localStorage.getItem(`${PLATFORM_SLUG}.prefs.chartColors`) ?? "\"default\"") as keyof typeof CHART_COLOR_PREFS;
+        const rollingWindow = JSON.parse(window.localStorage.getItem(`${PLATFORM_SLUG}.prefs.rollingWindow`) ?? "\"6h\"") as string;
         const rollingWindowHours = rollingWindow === "1h" ? 1 : rollingWindow === "24h" ? 24 : 6;
         return { colors: CHART_COLOR_PREFS[chartColors] ?? CHART_COLOR_PREFS.default, rollingWindowHours };
     } catch {
@@ -91,7 +92,7 @@ export default function DashboardPage() {
     const moduleEnabledMap = useMemo(() => {
         const map: Record<string, boolean> = {};
         for (const m of modules) {
-            const raw = typeof window === "undefined" ? null : window.localStorage.getItem(`acadia.module-enabled.${m.id}`);
+            const raw = typeof window === "undefined" ? null : window.localStorage.getItem(`${PLATFORM_SLUG}.module-enabled.${m.id}`);
             map[m.id] = raw === null ? true : raw === "true";
         }
         return map;

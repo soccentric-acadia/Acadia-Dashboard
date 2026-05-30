@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { getModules, getRuns, getRunResults } from "@/lib/api";
 import { modulesForOfflineDisplay, writeCachedModules } from "@/lib/modules/catalog";
+import { PLATFORM_SLUG } from "@/lib/platform";
 
 interface ModuleSummary {
     lastRun: string; // ISO timestamp of the most recent test result
@@ -29,7 +30,7 @@ function formatRunTime(iso: string): string {
     });
 }
 
-const MODULE_ENABLED_PREFIX = "acadia.module-enabled.";
+const MODULE_ENABLED_PREFIX = `${PLATFORM_SLUG}.module-enabled.`;
 
 function loadAllModuleEnabled(moduleIds: string[]): Record<string, boolean> {
     return Object.fromEntries(

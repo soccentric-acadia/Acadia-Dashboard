@@ -1,5 +1,5 @@
 const API_BASE =
-  process.env.NEXT_PUBLIC_ACADIA_SERVER?.replace(/\/$/, "") ?? "http://localhost:8080";
+  process.env.NEXT_PUBLIC_PLATFORM_SERVER?.replace(/\/$/, "") ?? "http://localhost:8080";
 
 export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;

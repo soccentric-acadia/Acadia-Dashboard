@@ -7,12 +7,13 @@ import { getGlobalLogs } from "@/lib/api";
 import { parseSsePayload, openSse } from "@/lib/sse";
 import type { LogEntry } from "@/lib/types/api";
 import { useAppShell } from "@/state/app-shell-context";
+import { PLATFORM_SLUG } from "@/lib/platform";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const levels = ["", "debug", "info", "warn", "error", "fatal"];
-const AUTO_SCROLL_KEY = "acadia.prefs.autoScroll";
+const AUTO_SCROLL_KEY = `${PLATFORM_SLUG}.prefs.autoScroll`;
 
 function tone(level: string) {
     const normalized = level.toLowerCase();

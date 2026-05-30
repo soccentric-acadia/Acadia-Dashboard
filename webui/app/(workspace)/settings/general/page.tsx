@@ -36,7 +36,7 @@ export default function GeneralSettingsPage() {
     return (
         <div className="space-y-5 pb-8">
             <Group title="Connection">
-                <Row label="Server address" value={process.env.NEXT_PUBLIC_ACADIA_SERVER ?? "http://localhost:8080"} />
+                <Row label="Server address" value={process.env.NEXT_PUBLIC_PLATFORM_SERVER ?? "http://localhost:8080"} />
                 <Row label="Connection status" value={health.isError ? "Offline" : health.data?.status ?? "Checking"} />
                 <Row label="Server version" value={health.data?.version ?? "Unavailable"} />
             </Group>

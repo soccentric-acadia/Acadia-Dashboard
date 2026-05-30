@@ -16,7 +16,7 @@ Next.js operator console for the SiliconCentric IV&V platform. The UI talks to t
 Set the Acadia Server base URL if it is not running on the default local address:
 
 ```bash
-NEXT_PUBLIC_ACADIA_SERVER=http://localhost:8080
+NEXT_PUBLIC_PLATFORM_SERVER=http://localhost:8080
 ```
 
 ## Development

@@ -23,6 +23,7 @@ import { testsForModule, type ModuleTestDefinition, type ModuleTestField } from 
 import { parseSsePayload, openSse } from "@/lib/sse";
 import type { ExecutionMode, ModuleInfo, Run, RunEventState, TestResult } from "@/lib/types/api";
 import { useAppShell } from "@/state/app-shell-context";
+import { PLATFORM_SLUG } from "@/lib/platform";
 
 
 
@@ -57,11 +58,11 @@ type TestValue = boolean | number | string;
 type TestPlanState = Record<string, { enabled: boolean; fields: Record<string, TestValue> }>;
 
 function testPlanStorageKey(moduleId: string): string {
-  return `acadia.module-tests.${moduleId}`;
+  return `${PLATFORM_SLUG}.module-tests.${moduleId}`;
 }
 
 function moduleEnabledStorageKey(moduleId: string): string {
-  return `acadia.module-enabled.${moduleId}`;
+  return `${PLATFORM_SLUG}.module-enabled.${moduleId}`;
 }
 
 function loadModuleEnabled(moduleId: string): boolean {
