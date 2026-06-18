@@ -389,6 +389,10 @@ export default function AiLlmPage() {
     // set-state-in-effect rule is intended for deriving state, not for clearing
     // it. All setters are exhaustive — they reset every piece of run-bound UI.
     useEffect(() => {
+        // Abort any in-flight chat stream and RAG build for the previous run.
+        // Without this, the Ollama response continues to write tokens into the
+        // new run's `messages` array, mixing contexts.
+        abortRef.current?.abort();
         buildAbort.current?.abort();
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setRagChunks([]);
