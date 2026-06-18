@@ -14,27 +14,51 @@ import { getHealth } from "@/lib/api";
 import { PLATFORM_SLUG } from "@/lib/platform";
 import type { ExecutionMode, ModuleRunSelection } from "@/lib/types/api";
 
-interface AppShellState {
-  mode: ExecutionMode;
+// ─── Actions (stable) ────────────────────────────────────────────────────────
+// All consumers that only need to dispatch (call setters) or check
+// `serverOnline` subscribe to this context. The setters are memoized with
+// useCallback so their identity is stable across renders, meaning a
+// consumer that only reads actions will not re-render when any other
+// piece of state changes. `serverOnline` changes only when the network
+// health flips, which is at most a few times per session.
+//
+// This used to be one big context whose `value` memo listed every state
+// field as a dep, so any setMode / setIsRunning call from any consumer
+// re-rendered every consumer — including heavy chart components. The
+// split lets consumers opt into only the slices they read.
+
+export interface AppShellActions {
   setMode: (mode: ExecutionMode) => void;
-  sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
-  activeRunId: string | null;
   setActiveRunId: (runId: string | null) => void;
-  isRunning: boolean;
   setIsRunning: (running: boolean) => void;
-  reviewingRunId: string | null;
   setReviewingRunId: (runId: string | null) => void;
-  themeMode: "system" | "light" | "dark";
   setThemeMode: (mode: "system" | "light" | "dark") => void;
-  activeModuleSelection: ModuleRunSelection | null;
   setActiveModuleSelection: (selection: ModuleRunSelection | null) => void;
   registerModuleSearchFocus: (focusFn: (() => void) | null) => void;
   focusModuleSearch: () => void;
   serverOnline: boolean | null;
 }
 
-const AppShellContext = createContext<AppShellState | null>(null);
+const AppShellActionsContext = createContext<AppShellActions | null>(null);
+
+// ─── State (changes often) ───────────────────────────────────────────────────
+// Components that read current state (mode, theme, run ids) subscribe
+// here. They re-render on any state change, which is what they asked
+// for — but components that only need to *dispatch* don't subscribe to
+// this and stay quiet.
+
+export interface AppShellState {
+  mode: ExecutionMode;
+  sidebarCollapsed: boolean;
+  activeRunId: string | null;
+  isRunning: boolean;
+  reviewingRunId: string | null;
+  themeMode: "system" | "light" | "dark";
+  activeModuleSelection: ModuleRunSelection | null;
+}
+
+const AppShellStateContext = createContext<AppShellState | null>(null);
 
 const SIDEBAR_KEY = `${PLATFORM_SLUG}.sidebar.collapsed`;
 const THEME_KEY = `${PLATFORM_SLUG}.theme.mode`;
@@ -122,35 +146,51 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     return () => media.removeEventListener("change", apply);
   }, [themeMode]);
 
+  // All setters are stable across renders. Identity never changes,
+  // so a consumer of AppShellActionsContext that only calls setters
+  // never re-renders.
   const registerModuleSearchFocus = useCallback((focusFn: (() => void) | null) => {
     setModuleSearchFocusFn(() => focusFn);
   }, []);
-
   const focusModuleSearch = useCallback(() => {
     moduleSearchFocusFn?.();
   }, [moduleSearchFocusFn]);
 
-  const value = useMemo<AppShellState>(
+  // Memoize the actions value. The setters are all stable, so this
+  // object reference only changes when `serverOnline` flips — exactly
+  // the consumers that care about online state.
+  const actions = useMemo<AppShellActions>(
     () => ({
-      mode,
       setMode,
-      sidebarCollapsed,
       setSidebarCollapsed,
-      activeRunId,
       setActiveRunId,
-      isRunning,
       setIsRunning,
-      reviewingRunId,
       setReviewingRunId,
-      themeMode,
       setThemeMode,
-      activeModuleSelection,
       setActiveModuleSelection,
       registerModuleSearchFocus,
       focusModuleSearch,
       serverOnline,
     }),
     [
+      registerModuleSearchFocus,
+      focusModuleSearch,
+      serverOnline,
+      // The setters come from useState and are stable by definition,
+      // but lint/exhaustive-deps wants them listed. They never change
+      // identity, so this is a no-op for memo invalidation.
+      setMode,
+      setSidebarCollapsed,
+      setActiveRunId,
+      setIsRunning,
+      setReviewingRunId,
+      setThemeMode,
+      setActiveModuleSelection,
+    ],
+  );
+
+  const state = useMemo<AppShellState>(
+    () => ({
       mode,
       sidebarCollapsed,
       activeRunId,
@@ -158,19 +198,39 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       reviewingRunId,
       themeMode,
       activeModuleSelection,
-      registerModuleSearchFocus,
-      focusModuleSearch,
-      serverOnline,
-    ],
+    }),
+    [mode, sidebarCollapsed, activeRunId, isRunning, reviewingRunId, themeMode, activeModuleSelection],
   );
 
-  return <AppShellContext.Provider value={value}>{children}</AppShellContext.Provider>;
+  return (
+    <AppShellActionsContext.Provider value={actions}>
+      <AppShellStateContext.Provider value={state}>{children}</AppShellStateContext.Provider>
+    </AppShellActionsContext.Provider>
+  );
 }
 
-export function useAppShell() {
-  const ctx = useContext(AppShellContext);
+export function useAppShellActions(): AppShellActions {
+  const ctx = useContext(AppShellActionsContext);
   if (!ctx) {
-    throw new Error("useAppShell must be used inside AppShellProvider");
+    throw new Error("useAppShellActions must be used inside AppShellProvider");
   }
   return ctx;
+}
+
+export function useAppShellState(): AppShellState {
+  const ctx = useContext(AppShellStateContext);
+  if (!ctx) {
+    throw new Error("useAppShellState must be used inside AppShellProvider");
+  }
+  return ctx;
+}
+
+// Backwards-compatible: useAppShell() returns the union of both. This is
+// the existing public API; new callers should prefer the slice-specific
+// hooks above for better render isolation. Existing call sites keep
+// working without churn.
+export function useAppShell(): AppShellState & AppShellActions {
+  const actions = useAppShellActions();
+  const state = useAppShellState();
+  return { ...state, ...actions };
 }
