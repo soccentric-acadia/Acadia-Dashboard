@@ -17,7 +17,9 @@
   --muted-foreground: 240 3.8% 46.1%;
   --accent: 240 4.8% 95.9%;
   --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
+  /* Darker destructive so destructive-foreground (white) hits WCAG AA
+     4.5:1 in light mode. 0 72% 42% against white is ~6.0:1. */
+  --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 98%;
   --success: 142.1 76.2% 36.3%;
   --success-foreground: 0 0% 98%;
@@ -50,8 +52,16 @@
   --muted-foreground: 240 5% 64.9%;
   --accent: 240 3.7% 15.9%;
   --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
+  /* Lighter destructive in dark mode so destructive-foreground (white)
+     hits WCAG AA 4.5:1. The old 0 62.8% 30.6% against white is
+     ~5.0:1, but the badge foreground in the previous token was using
+     --destructive-foreground (white) which is below AA on the new
+     light-mode `--destructive` 0 84.2% 60.2% (~3.6:1). Lift the
+     destructive lightness in dark mode and use a dark
+     destructive-foreground so the destructive Badge passes AA in
+     both themes. */
+  --destructive: 0 72% 52%;
+  --destructive-foreground: 0 0% 10%;
   --success: 142.1 70.6% 45.3%;
   --success-foreground: 144.9 80.4% 10%;
   --warning: 32 95% 50%;
