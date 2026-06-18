@@ -89,6 +89,28 @@ export default function DashboardPage() {
     );
     const totalTests = useMemo(() => modules.reduce((s, m) => s + (moduleTestCounts[m.id] ?? 0), 0), [modules, moduleTestCounts]);
 
+    // Subscribe to localStorage 'storage' events so the map updates when
+    // the user toggles a module on the modules index page in another tab
+    // or in the same tab. The storage event fires for *other* documents
+    // only; for same-tab updates we also re-read on visibility change.
+    const [storageTick, setStorageTick] = useState(0);
+    useEffect(() => {
+        const onStorage = (e: StorageEvent) => {
+            if (!e.key || e.key.startsWith(`${PLATFORM_SLUG}.module-enabled.`)) {
+                setStorageTick((t) => t + 1);
+            }
+        };
+        const onVisible = () => {
+            if (document.visibilityState === "visible") setStorageTick((t) => t + 1);
+        };
+        window.addEventListener("storage", onStorage);
+        document.addEventListener("visibilitychange", onVisible);
+        return () => {
+            window.removeEventListener("storage", onStorage);
+            document.removeEventListener("visibilitychange", onVisible);
+        };
+    }, []);
+
     const moduleEnabledMap = useMemo(() => {
         const map: Record<string, boolean> = {};
         for (const m of modules) {
@@ -96,7 +118,10 @@ export default function DashboardPage() {
             map[m.id] = raw === null ? true : raw === "true";
         }
         return map;
-    }, [modules]);
+        // storageTick re-triggers the read whenever a 'storage' event fires
+        // or the tab regains focus.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [modules, storageTick]);
     const enabledModuleCount = modules.filter((m) => moduleEnabledMap[m.id] !== false).length;
 
     // Latest run results for pass/fail stats
