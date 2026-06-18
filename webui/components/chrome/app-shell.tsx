@@ -99,6 +99,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Skip all app hotkeys when the user is typing in an editable element.
+      // Without this, Space toggles runs while a <select> is open, and "1"/
+      // "2"/"3"/"4" silently flips the global mode while typing in any
+      // input. The set of editable tags matches the WHATWG editable-element
+      // definition: form fields, <select>, contenteditable, ARIA textboxes.
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable =
+        target?.isContentEditable ||
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target?.getAttribute("role") === "textbox" ||
+        target?.getAttribute("role") === "combobox";
+
+      if (isEditable) return;
+
       if (event.key === "?" && !event.metaKey && !event.ctrlKey) {
         event.preventDefault();
         setShowHelp(true);
@@ -117,7 +134,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (event.key === " " && !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement)?.tagName)) {
+      if (event.key === " ") {
         event.preventDefault();
         runMutation.mutate();
         return;
