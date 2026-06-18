@@ -12,9 +12,16 @@ import { safeDecodeSegment } from "@/lib/utils";
 
 export default function ModulePage() {
     const params = useParams<{ moduleId: string }>();
-    const moduleId = safeDecodeSegment(params.moduleId);
+    // Keep the raw segment for the query key. Two URLs that decode to
+    // the same id (e.g. "/modules/foo" vs "/modules/%66oo") share the
+    // same cache entry today, but if a module id ever differed only
+    // by encoding (e.g. "foo+bar" vs "foo%20bar") the decoded key
+    // would silently collide. Use the raw segment for caching; the
+    // decoded form is for display and for getModule().
+    const rawModuleId = params.moduleId;
+    const moduleId = useMemo(() => safeDecodeSegment(rawModuleId), [rawModuleId]);
     const { data: module, isLoading, isError, refetch } = useQuery({
-        queryKey: ["module", moduleId],
+        queryKey: ["module", rawModuleId],
         queryFn: () => getModule(moduleId),
     });
     const fallbackModule = useMemo(() => modulesForOfflineDisplay(undefined).find((item) => item.id === moduleId), [moduleId]);
