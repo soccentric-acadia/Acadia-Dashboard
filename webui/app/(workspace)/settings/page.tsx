@@ -271,13 +271,27 @@ export default function SettingsPage() {
     const retentionDays = retentionDaysDraft ?? retention.data?.retention_days ?? 30;
     const maxResults = maxResultsDraft ?? retention.data?.max_run_results ?? 10_000;
     const [purgeStatus, setPurgeStatus] = useState<string | null>(null);
-    async function handlePurge() {
-        setPurgeStatus("Applying...");
+
+    // Shared PUT helper used by both the per-field onBlur handlers and
+    // the explicit Purge button. Reuses `purgeStatus` (the same endpoint)
+    // and auto-clears the message after 3s so the UI doesn't accumulate
+    // stale state across edits.
+    async function pushRetention(next: { retention_days?: number; max_run_results?: number }, label: string) {
+        setPurgeStatus(`Applying ${label}...`);
         try {
-            await updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults });
+            await updateRetentionSettings({
+                retention_days: next.retention_days ?? retentionDays,
+                max_run_results: next.max_run_results ?? maxResults,
+            });
             setPurgeStatus("Retention policy applied.");
-        } catch { setPurgeStatus("Failed to update retention."); }
+        } catch (err) {
+            setPurgeStatus(err instanceof Error ? `Failed: ${err.message}` : "Failed to update retention.");
+        }
         setTimeout(() => setPurgeStatus(null), 3000);
+    }
+
+    async function handlePurge() {
+        await pushRetention({}, "purge");
     }
 
     // Module category breakdown
@@ -431,7 +445,7 @@ export default function SettingsPage() {
                                 setRetentionDays(null);
                                 return;
                             }
-                            void updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults });
+                            void pushRetention({ retention_days: retentionDays }, "retention days");
                         }}
                         className="h-9 w-24 rounded-md border border-input bg-transparent px-3 text-right text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
@@ -453,7 +467,7 @@ export default function SettingsPage() {
                                 setMaxResults(null);
                                 return;
                             }
-                            void updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults });
+                            void pushRetention({ max_run_results: maxResults }, "max run results");
                         }}
                         className="h-9 w-24 rounded-md border border-input bg-transparent px-3 text-right text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
