@@ -532,7 +532,8 @@ export default function AiLlmPage() {
             // accumulation and keeps the value out of the render closure.
             const accumulatedRef = { current: "" };
 
-            while (true) {
+            let streamDone = false;
+            while (!streamDone) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 const lines = decoder.decode(value, { stream: true }).split("\n").filter(Boolean);
@@ -546,7 +547,13 @@ export default function AiLlmPage() {
                             updated[placeholderIdx] = { role: "assistant", content: snapshot };
                             return updated;
                         });
-                        if (parsed?.done) break;
+                        // Ollama's terminal chunk sets done: true. Stop
+                        // the outer read loop too — otherwise we burn one
+                        // extra reader.read() round-trip per reply.
+                        if (parsed?.done) {
+                            streamDone = true;
+                            break;
+                        }
                     } catch { /* partial JSON */ }
                 }
             }
