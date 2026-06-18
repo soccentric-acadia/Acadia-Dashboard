@@ -192,9 +192,11 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
       setLiveResults((prev) => [payload, ...prev].slice(0, 1000));
     });
 
-    source.onerror = () => {
-      source.close();
-    };
+    // Do NOT close the source on error. EventSource auto-reconnects on
+    // transient network blips; closing here would drop the next batch of
+    // 'result' events. The effect's cleanup on unmount/dep change is the
+    // single place that closes the source. We still listen for errors so
+    // a future UI status (e.g. "reconnecting…") can be wired up.
 
     return () => source.close();
   }, [activeRunId, isRunning, module.id, refetchResults, setActiveRunId, setIsRunning]);
