@@ -53,16 +53,49 @@ const CHART_COLOR_PREFS = {
     },
 } as const;
 
-function readChartPrefs() {
-    if (typeof window === "undefined") return { colors: CHART_COLOR_PREFS.default, rollingWindowHours: 6 };
+// ROLLING_WINDOWS and CHART_COLOR_KEYS stay in lockstep with the prefs
+// stored by usePref in app/(workspace)/settings/page.tsx. Anything not in
+// these unions falls back to the default — the read path is the only
+// place that needs to defend against stale or hand-edited storage.
+type RollingWindowKey = "1h" | "6h" | "24h";
+type ChartColorKey = keyof typeof CHART_COLOR_PREFS;
+const ROLLING_WINDOWS: Record<RollingWindowKey, number> = { "1h": 1, "6h": 6, "24h": 24 };
+const ROLLING_WINDOW_KEYS = Object.keys(ROLLING_WINDOWS) as RollingWindowKey[];
+
+function isRollingWindowKey(v: unknown): v is RollingWindowKey {
+    return typeof v === "string" && (ROLLING_WINDOW_KEYS as string[]).includes(v);
+}
+function isChartColorKey(v: unknown): v is ChartColorKey {
+    return typeof v === "string" && v in CHART_COLOR_PREFS;
+}
+
+function readStoredPref<T>(key: string, guard: (v: unknown) => v is T, fallback: T): T {
+    if (typeof window === "undefined") return fallback;
     try {
-        const chartColors = JSON.parse(window.localStorage.getItem(`${PLATFORM_SLUG}.prefs.chartColors`) ?? "\"default\"") as keyof typeof CHART_COLOR_PREFS;
-        const rollingWindow = JSON.parse(window.localStorage.getItem(`${PLATFORM_SLUG}.prefs.rollingWindow`) ?? "\"6h\"") as string;
-        const rollingWindowHours = rollingWindow === "1h" ? 1 : rollingWindow === "24h" ? 24 : 6;
-        return { colors: CHART_COLOR_PREFS[chartColors] ?? CHART_COLOR_PREFS.default, rollingWindowHours };
+        const raw = window.localStorage.getItem(key);
+        if (raw === null) return fallback;
+        const parsed: unknown = JSON.parse(raw);
+        return guard(parsed) ? parsed : fallback;
     } catch {
-        return { colors: CHART_COLOR_PREFS.default, rollingWindowHours: 6 };
+        return fallback;
     }
+}
+
+function readChartPrefs() {
+    const chartColors = readStoredPref<ChartColorKey>(
+        `${PLATFORM_SLUG}.prefs.chartColors`,
+        isChartColorKey,
+        "default",
+    );
+    const rollingWindow = readStoredPref<RollingWindowKey>(
+        `${PLATFORM_SLUG}.prefs.rollingWindow`,
+        isRollingWindowKey,
+        "6h",
+    );
+    return {
+        colors: CHART_COLOR_PREFS[chartColors],
+        rollingWindowHours: ROLLING_WINDOWS[rollingWindow],
+    };
 }
 
 export default function DashboardPage() {
