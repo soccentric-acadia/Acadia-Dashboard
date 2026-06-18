@@ -73,17 +73,26 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
   const [activeModuleSelection, setActiveModuleSelection] = useState<ModuleRunSelection | null>(null);
   const [moduleSearchFocusFn, setModuleSearchFocusFn] = useState<(() => void) | null>(null);
 
-  const { data: healthData, isError: healthError } = useQuery({
+  const { data: healthData, isError: healthError, isPending: healthPending } = useQuery({
     queryKey: ["health"],
     queryFn: getHealth,
     refetchInterval: 10_000,
     retry: 0,
   });
-  const serverOnline: boolean | null = healthData
-    ? !healthError && healthData.status === "ok"
-    : healthError
-      ? false
-      : null;
+  // Server status with three explicit states:
+  //  - null:  never been queried, or query is still in flight with no cache
+  //  - true:  last successful response said status === "ok"
+  //  - false: the most recent response was an error
+  // On a transient blip the previous cached healthData is still in memory
+  // while the new fetch is erroring; we must NOT report `true` in that
+  // window. isError from the latest run is the source of truth.
+  const serverOnline: boolean | null = healthError
+    ? false
+    : healthPending && !healthData
+      ? null
+      : healthData
+        ? healthData.status === "ok"
+        : null;
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_KEY, String(sidebarCollapsed));
