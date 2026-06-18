@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getModule } from "@/lib/api";
 import { modulesForOfflineDisplay } from "@/lib/modules/catalog";
+import { safeDecodeSegment } from "@/lib/utils";
 
 export default function ModulePage() {
     const params = useParams<{ moduleId: string }>();
-    const moduleId = decodeURIComponent(params.moduleId);
+    const moduleId = safeDecodeSegment(params.moduleId);
     const { data: module, isLoading, isError, refetch } = useQuery({
         queryKey: ["module", moduleId],
         queryFn: () => getModule(moduleId),

@@ -53,3 +53,18 @@ export function normalizeStatus(status: string | undefined): string {
     if (!status) return "—";
     return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
+
+/**
+ * Safely decode a URL path segment. Next.js hands the dynamic segment raw
+ * (e.g. "%E0%A4%A") and we usually want the decoded form, but a malformed
+ * escape throws URIError and white-screens the page when no error
+ * boundary exists above. Fall back to the raw value on failure.
+ */
+export function safeDecodeSegment(value: string | undefined | null): string {
+    if (!value) return "";
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+}
