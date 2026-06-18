@@ -479,17 +479,29 @@ export default function AiLlmPage() {
         const topChunks = retrieveTopK(qEmbed, ragChunks, RAG_TOP_K);
         const systemPrompt = buildSystemPrompt(runDetail, topChunks);
 
+        // Build history from current `messages`. As long as sendMessage is gated
+        // on `streaming`, messages can't shift between this read and the
+        // placeholder commit. The functional-updater pattern below also
+        // computes the placeholder index from the latest committed state, so
+        // even if a future change loosens the streaming gate, indices stay
+        // correct.
         const history: ChatMessage[] = [
             { role: "system", content: systemPrompt },
             ...messages,
             { role: "user", content: userText },
         ];
 
-        setMessages((prev) => [...prev, { role: "user", content: userText }]);
         setStreaming(true);
 
-        const placeholderIdx = messages.length + 1;
-        setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+        // Commit user + placeholder in a single functional update so the
+        // placeholder index is computed against the post-user-commit state.
+        let placeholderIdx = -1;
+        setMessages((prev) => {
+            const userMsg: ChatMessage = { role: "user", content: userText };
+            const assistantMsg: ChatMessage = { role: "assistant", content: "" };
+            placeholderIdx = prev.length + 1;
+            return [...prev, userMsg, assistantMsg];
+        });
 
         const abort = new AbortController();
         abortRef.current = abort;
@@ -538,7 +550,13 @@ export default function AiLlmPage() {
         } catch (err) {
             if (err instanceof Error && err.name === "AbortError") return;
             setOllamaError(err instanceof Error ? err.message : String(err));
-            setMessages((prev) => prev.slice(0, -1));
+            // Roll back only the assistant placeholder; leave the user
+            // question in history so the operator can see what was asked.
+            setMessages((prev) =>
+                placeholderIdx >= 0 && placeholderIdx < prev.length
+                    ? prev.filter((_, i) => i !== placeholderIdx)
+                    : prev,
+            );
         } finally {
             setStreaming(false);
             abortRef.current = null;
