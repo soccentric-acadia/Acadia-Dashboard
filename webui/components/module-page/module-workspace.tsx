@@ -154,8 +154,12 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
   });
 
   const moduleRuns = useMemo(() => {
+    // Include legacy/older runs whose `mode` is null or empty under any
+    // selected mode, otherwise they silently disappear from the module's
+    // "Previous Runs" table even though they remain visible on the
+    // dashboard.
     return (runsData?.runs ?? []).filter((run) => {
-      return !mode || run.mode === mode;
+      return !run.mode || !mode || run.mode === mode;
     });
   }, [mode, runsData?.runs]);
 
