@@ -413,9 +413,26 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
                     <span className="text-sm text-muted-foreground">Retention days</span>
                     <input
-                        type="number" min={1} value={retentionDays}
-                        onChange={(e) => setRetentionDays(Number(e.target.value))}
-                        onBlur={() => void updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults })}
+                        type="number" min={1}
+                        value={retentionDaysDraft ?? ""}
+                        onChange={(e) => {
+                            const raw = e.target.value;
+                            // Allow empty so the user can clear and retype.
+                            // Number("") === 0 which would PUT a purge-all,
+                            // so we store null in that case.
+                            setRetentionDays(raw === "" ? null : Number(raw));
+                        }}
+                        onBlur={() => {
+                            // Skip the PUT if the user typed an invalid
+                            // value (null/0/negative). Revert by clearing
+                            // the draft so the input snaps back to the
+                            // server's value on next render.
+                            if (retentionDays == null || retentionDays < 1) {
+                                setRetentionDays(null);
+                                return;
+                            }
+                            void updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults });
+                        }}
                         className="h-9 w-24 rounded-md border border-input bg-transparent px-3 text-right text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
                 </div>
@@ -425,9 +442,19 @@ export default function SettingsPage() {
                         <p className="mt-0.5 text-xs text-muted-foreground/60">Per-run result cap</p>
                     </div>
                     <input
-                        type="number" min={1} value={maxResults}
-                        onChange={(e) => setMaxResults(Number(e.target.value))}
-                        onBlur={() => void updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults })}
+                        type="number" min={1}
+                        value={maxResultsDraft ?? ""}
+                        onChange={(e) => {
+                            const raw = e.target.value;
+                            setMaxResults(raw === "" ? null : Number(raw));
+                        }}
+                        onBlur={() => {
+                            if (maxResults == null || maxResults < 1) {
+                                setMaxResults(null);
+                                return;
+                            }
+                            void updateRetentionSettings({ retention_days: retentionDays, max_run_results: maxResults });
+                        }}
                         className="h-9 w-24 rounded-md border border-input bg-transparent px-3 text-right text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
                 </div>
