@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { ChevronRight, RefreshCw, Trash2, Upload } from "lucide-react";
@@ -95,6 +95,31 @@ function usePref<T>(key: string, defaultValue: T): [T, (v: T) => void] {
         setValue(v);
         try { window.localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ }
     }, [key]);
+
+    // Cross-tab sync: subscribe to the `storage` event so a change in
+    // another tab updates this tab's state. The `storage` event only
+    // fires for *other* documents, so this never re-fires for the
+    // setter above. A malformed value in another tab is ignored
+    // (we keep our current value rather than reset to default).
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onStorage = (e: StorageEvent) => {
+            if (e.key !== key) return;
+            if (e.newValue === null) {
+                // Key was cleared in the other tab; snap back to default.
+                setValue(defaultValue);
+                return;
+            }
+            try {
+                setValue(JSON.parse(e.newValue) as T);
+            } catch {
+                // ignore — keep the current value
+            }
+        };
+        window.addEventListener("storage", onStorage);
+        return () => window.removeEventListener("storage", onStorage);
+    }, [key, defaultValue]);
+
     return [value, set];
 }
 
