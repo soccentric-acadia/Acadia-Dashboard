@@ -271,9 +271,20 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
       enabledTestNames: activeModuleConfig.test_names,
       moduleConfig: activeModuleConfig,
     });
-
-    return () => setActiveModuleSelection(null);
+    // No cleanup here. The previous effect ran a cleanup that called
+    // setActiveModuleSelection(null), but because activeModuleConfig is
+    // recomputed on every testPlan change, the cleanup fired on every
+    // field toggle, briefly nulling the selection and tripping the
+    // run-start precondition. Unmount-only cleanup is in the effect
+    // below.
   }, [activeModuleConfig, module.config_type_url, module.id, module.name, moduleEnabled, setActiveModuleSelection]);
+
+  // Unmount-only cleanup: clear the global selection when this workspace
+  // is removed from the tree (e.g. navigating to a different module or
+  // route). This is the single place that nulls the selection.
+  useEffect(() => {
+    return () => setActiveModuleSelection(null);
+  }, [setActiveModuleSelection]);
 
   const mergedResults = useMemo(() => {
     const base = selectedResultsData?.results ?? [];
