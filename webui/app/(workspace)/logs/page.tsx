@@ -66,8 +66,16 @@ export default function LogsPage() {
         const combined = [...(data?.logs ?? []), ...liveLogs];
         const seen = new Set<string>();
         return combined
-            .filter((entry) => {
-                const id = entry.id || `${entry.timestamp}-${entry.message}`;
+            .map((entry, index) => ({ entry, index }))
+            .filter(({ entry, index }) => {
+                // Include source, level, and a position counter so two events
+                // sharing the same second-resolution timestamp and identical
+                // message don't collide. Without this, warn/error pairs on
+                // the same condition deduped to one entry and one was
+                // silently dropped.
+                const id =
+                    entry.id ||
+                    `${entry.source ?? ""}|${entry.level ?? entry.severity ?? ""}|${entry.timestamp ?? ""}|${index}|${entry.message ?? ""}`;
                 if (seen.has(id)) return false;
                 seen.add(id);
                 if (source && entry.source !== source) return false;
@@ -75,6 +83,7 @@ export default function LogsPage() {
                 if (query && !entry.message.toLowerCase().includes(query.toLowerCase())) return false;
                 return true;
             })
+            .map(({ entry }) => entry)
             .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     }, [data?.logs, level, liveLogs, query, source]);
 
