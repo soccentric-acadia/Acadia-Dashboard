@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createConfig, createRun, cancelRun } from "@/lib/api";
 import type { ExecutionMode } from "@/lib/types/api";
 import { HelpShortcutsDialog } from "@/components/chrome/help-shortcuts-dialog";
@@ -152,8 +152,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [focusModuleSearch, isRunning, runMutation, setMode, setSidebarCollapsed]);
 
+  // Track the last non-/settings path so lockNavigation can bounce the
+  // user back instead of leaving them stranded on the settings page when
+  // they hit Start. The ref is updated on every render, but we only
+  // redirect when the user lands on a /settings route while locked.
+  const lastSafePathRef = useRef<string>(pathname);
+
   useEffect(() => {
-    if (lockNavigation && pathname.startsWith("/settings")) router.replace(pathname);
+    if (pathname.startsWith("/settings")) return;
+    lastSafePathRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    if (lockNavigation && pathname.startsWith("/settings")) {
+      // router.replace(pathname) was a no-op. Redirect to the last safe
+      // (non-settings) path the user was on. If we don't have one, send
+      // them to the dashboard, which is always present.
+      const target = lastSafePathRef.current?.startsWith("/settings")
+        ? "/dashboard"
+        : lastSafePathRef.current || "/dashboard";
+      router.replace(target);
+    }
   }, [lockNavigation, pathname, router]);
 
   return (
