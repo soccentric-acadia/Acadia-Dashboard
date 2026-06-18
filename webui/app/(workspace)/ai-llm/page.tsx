@@ -430,7 +430,11 @@ export default function AiLlmPage() {
         const embedded: RagChunk[] = [];
         try {
             for (let i = 0; i < rawChunks.length; i += EMBED_BATCH) {
-                if (abort.signal.aborted) return;
+                if (abort.signal.aborted) {
+                    setRagStatus("idle");
+                    setRagProgress({ done: 0, total: 0 });
+                    return;
+                }
                 const batch = rawChunks.slice(i, i + EMBED_BATCH);
                 const embeddings = await Promise.all(
                     batch.map((c) => embedText(c.text, abort.signal)),
@@ -441,7 +445,11 @@ export default function AiLlmPage() {
                 setRagProgress({ done: embedded.length, total: rawChunks.length });
             }
         } catch (err) {
-            if (abort.signal.aborted) return;
+            if (abort.signal.aborted) {
+                setRagStatus("idle");
+                setRagProgress({ done: 0, total: 0 });
+                return;
+            }
             const msg = err instanceof Error ? err.message : String(err);
             setRagError(msg);
             setRagStatus("error");
