@@ -48,31 +48,48 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           throw new Error("Select a module and enable at least one HAL test before starting a run.");
         }
 
-        const config = await createConfig({
-          name: `${activeModuleSelection.moduleName} ${mode}`,
-          description: JSON.stringify(
-            {
-              module_id: activeModuleSelection.moduleId,
-              enabled_test_names: activeModuleSelection.enabledTestNames,
+        let config;
+        try {
+          config = await createConfig({
+            name: `${activeModuleSelection.moduleName} ${mode}`,
+            description: JSON.stringify(
+              {
+                module_id: activeModuleSelection.moduleId,
+                enabled_test_names: activeModuleSelection.enabledTestNames,
+              },
+              null,
+              2,
+            ),
+            mode,
+            common_config: {
+              source: "webui",
+              execution_mode: mode,
             },
-            null,
-            2,
-          ),
-          mode,
-          common_config: {
-            source: "webui",
-            execution_mode: mode,
-          },
-          modules: [
-            {
-              module_id: activeModuleSelection.moduleId,
-              config_type_url: activeModuleSelection.configTypeUrl,
-              config: activeModuleSelection.moduleConfig,
-            },
-          ],
-        });
-        const run = await createRun(mode, config.id);
-        return { type: "start" as const, runId: run.id };
+            modules: [
+              {
+                module_id: activeModuleSelection.moduleId,
+                config_type_url: activeModuleSelection.configTypeUrl,
+                config: activeModuleSelection.moduleConfig,
+              },
+            ],
+          });
+        } catch (err) {
+          throw new Error(`Failed to create config: ${err instanceof Error ? err.message : String(err)}`);
+        }
+
+        // createConfig succeeded but createRun failed — leave a clear
+        // breadcrumb so the operator knows the server holds an orphan
+        // config. There's no deleteConfig API; the operator must clean
+        // it up from the server side. Invalidate configs so the list
+        // view (when present) reflects the new orphan.
+        try {
+          const run = await createRun(mode, config.id);
+          return { type: "start" as const, runId: run.id };
+        } catch (err) {
+          void queryClient.invalidateQueries({ queryKey: ["configs"] });
+          const reason = err instanceof Error ? err.message : String(err);
+          throw new Error(`Config ${config.id} was created on the server but the run could not be started (${reason}). The config is now an orphan — clean it up from the server.`);
+        }
       }
       await cancelRun(activeRunId);
       return { type: "stop" as const, runId: activeRunId };
