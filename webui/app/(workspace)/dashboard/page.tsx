@@ -516,8 +516,8 @@ export default function DashboardPage() {
                             <CardTitle className="flex items-center gap-2"><RadioTower size={18} /> Recent Logs</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                            {(logs.data?.logs ?? []).slice(0, 5).map((entry) => (
-                                <div key={entry.id || `${entry.timestamp}-${entry.message}`} className="text-sm">
+                            {(logs.data?.logs ?? []).slice(0, 5).map((entry, index) => (
+                                <div key={entry.id || `${entry.source ?? ""}-${entry.level ?? entry.severity ?? ""}-${index}-${entry.timestamp}-${entry.message}`} className="text-sm">
                                     <div className="flex items-center gap-2"><Badge variant={statusVariant(entry.level || entry.severity)}>{entry.level || entry.severity || "info"}</Badge><span className="text-xs text-muted-foreground">{entry.source || "system"}</span></div>
                                     <p className="mt-1 line-clamp-2 text-foreground">{entry.message}</p>
                                     <Separator className="mt-2" />
