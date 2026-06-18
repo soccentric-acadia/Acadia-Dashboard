@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { cn, formatClock, formatDuration, formatRunDuration, resultVariant, statusVariant } from "@/lib/utils";
 import { Activity, ChevronDown, Settings2 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -173,10 +173,22 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
     retry: 0,
   });
 
+  // SSE source lifecycle is bound to activeRunId only — NOT to isRunning.
+  // The previous design listed isRunning as a dep, so when the 'state'
+  // event handler called setIsRunning(running) the effect re-ran, its
+  // cleanup closed the source, and late 'result' events for the same
+  // run were lost. Closing is now keyed solely on activeRunId becoming
+  // null (real run end or navigation) or component unmount.
+  const sourceRef = useRef<EventSource | null>(null);
   useEffect(() => {
-    if (!activeRunId || !isRunning) return;
+    if (!activeRunId) {
+      sourceRef.current?.close();
+      sourceRef.current = null;
+      return;
+    }
 
     const source = openSse(`/api/v1/runs/${activeRunId}/events`);
+    sourceRef.current = source;
 
     source.addEventListener("state", (event) => {
       const payload = parseSsePayload<RunEventState>((event as MessageEvent).data);
@@ -184,6 +196,10 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
       const running = payload.status.toLowerCase().includes("running");
       setIsRunning(running);
       if (!running) {
+        // Don't close the source here — let the activeRunId effect's
+        // cleanup handle that when activeRunId is cleared below. In
+        // between, late 'result' events for this run still flow into
+        // setLiveResults and are then captured by refetchResults().
         setActiveRunId(null);
         void refetchResults();
       }
@@ -198,12 +214,14 @@ export function ModuleWorkspace({ module }: { module: ModuleInfo }) {
 
     // Do NOT close the source on error. EventSource auto-reconnects on
     // transient network blips; closing here would drop the next batch of
-    // 'result' events. The effect's cleanup on unmount/dep change is the
-    // single place that closes the source. We still listen for errors so
-    // a future UI status (e.g. "reconnecting…") can be wired up.
+    // 'result' events. We still listen for errors so a future UI status
+    // (e.g. "reconnecting…") can be wired up.
 
-    return () => source.close();
-  }, [activeRunId, isRunning, module.id, refetchResults, setActiveRunId, setIsRunning]);
+    return () => {
+      source.close();
+      sourceRef.current = null;
+    };
+  }, [activeRunId, module.id, refetchResults, setActiveRunId, setIsRunning]);
 
   useEffect(() => {
     if (!isRunning) return;
