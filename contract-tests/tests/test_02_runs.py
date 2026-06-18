@@ -81,3 +81,54 @@ def test_run_results_endpoint(http: httpx.Client) -> None:
 def test_invalid_run_id_returns_404(http: httpx.Client) -> None:
     r = http.get("/api/v1/runs/does-not-exist-12345")
     assert r.status_code == 404
+
+
+@pytest.mark.runs
+def test_config_id_flow_round_trip(http: httpx.Client) -> None:
+    """The webui always creates a config first and then POSTs a run
+    with { config_id, mode }. Lock that contract: a config must be
+    creatable, a run referencing it must succeed, and the run's
+    `config_id` must be preserved on GET.
+
+    See webui/components/chrome/app-shell.tsx:51-74.
+    """
+    cfg_payload = {
+        "name": "contract-config-id-flow",
+        "description": '{"module_id":"contract-cfg","enabled_test_names":[]}',
+        "mode": "single_shot",
+        "common_config": {"source": "contract-test", "execution_mode": "single_shot"},
+        "modules": [
+            {
+                "module_id": "contract-cfg",
+                "config_type_url": "",
+                "config": {},
+            }
+        ],
+    }
+    cfg_resp = http.post("/api/v1/configs", json=cfg_payload)
+    assert cfg_resp.status_code in (200, 201), (
+        f"createConfig returned {cfg_resp.status_code}: {cfg_resp.text!r}. "
+        "The webui always creates a config first; if this endpoint is "
+        "broken, the dashboard's 'start run' flow cannot work end-to-end."
+    )
+    cfg = cfg_resp.json()
+    assert "id" in cfg, f"createConfig response missing 'id': {cfg}"
+
+    run_resp = http.post(
+        "/api/v1/runs",
+        json={"config_id": cfg["id"], "mode": "single_shot"},
+    )
+    assert run_resp.status_code in (200, 201), (
+        f"createRun with config_id returned {run_resp.status_code}: {run_resp.text!r}. "
+        "The webui sends { config_id, mode } — the server must accept that exact shape."
+    )
+    run = run_resp.json()
+    assert "id" in run, f"createRun response missing 'id': {run}"
+
+    # The run's config_id must be preserved. If the server drops it, the
+    # dashboard loses the link between a run and the config that drove it.
+    fetched = _get_run(http, run["id"])
+    assert fetched.get("config_id") == cfg["id"], (
+        f"Run's config_id was not preserved. Sent {cfg['id']!r}, "
+        f"got {fetched.get('config_id')!r}."
+    )
