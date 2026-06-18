@@ -227,20 +227,26 @@ function OtaDeviceCard() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-    const { themeMode, setThemeMode } = useAppShell();
+    const { themeMode, setThemeMode, serverOnline } = useAppShell();
 
     const health = useQuery({ queryKey: ["health"], queryFn: getHealth, refetchInterval: 10_000 });
     const target = useQuery({ queryKey: ["target"], queryFn: getTarget, retry: 1 });
     const modules = useQuery({ queryKey: ["modules"], queryFn: getModules });
     const retention = useQuery({ queryKey: ["retention"], queryFn: getRetentionSettings });
 
+    const measureLatency = useCallback(async (): Promise<number> => {
+        const start = performance.now();
+        await getHealth();
+        return Math.round(performance.now() - start);
+    }, []);
     const latency = useQuery({
         queryKey: ["latency"],
-        queryFn: async () => {
-            const start = performance.now();
-            await getHealth();
-            return Math.round(performance.now() - start);
-        },
+        queryFn: measureLatency,
+        // Only measure when the server is reachable. Without this gate the
+        // latency query fires on mount regardless of the rest of the page's
+        // online state, which produces a "—" → "—/—ms" flicker and an
+        // unnecessary failed request when the server is offline.
+        enabled: serverOnline !== false,
         retry: 0,
     });
 
