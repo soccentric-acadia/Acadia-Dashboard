@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn, statusVariant } from "@/lib/utils";
 import type { Run, TestResult, LogEntry } from "@/lib/types/api";
+import { useAppShell } from "@/state/app-shell-context";
 
 // ─── Config ──────────────────────────────────────────────────────────────────────────────
 const OLLAMA_BASE = "http://localhost:11434";
@@ -341,6 +342,7 @@ function RunContextPanel({
 // ─── Main page ────────────────────────────────────────────────────────────────────────────
 export default function AiLlmPage() {
     const [selectedRunId, setSelectedRunId]   = useState("");
+    const { serverOnline } = useAppShell();
     const [ragChunks, setRagChunks]           = useState<RagChunk[]>([]);
     const [ragStatus, setRagStatus]           = useState<RagStatus>("idle");
     const [ragProgress, setRagProgress]       = useState({ done: 0, total: 0 });
@@ -358,25 +360,26 @@ export default function AiLlmPage() {
     const { data: runsData } = useQuery({
         queryKey: ["runs", "ai-llm"],
         queryFn: () => getRuns({ limit: 100 }),
+        enabled: serverOnline !== false,
     });
     const runs = runsData?.runs ?? [];
 
     const { data: runDetail, isFetching: runFetching } = useQuery({
         queryKey: ["run", selectedRunId],
         queryFn: () => getRun(selectedRunId),
-        enabled: !!selectedRunId,
+        enabled: !!selectedRunId && serverOnline !== false,
     });
 
     const { data: resultsData, isFetching: resultsFetching } = useQuery({
         queryKey: ["run-results", selectedRunId],
         queryFn: () => getRunResults(selectedRunId, { limit: 500 }),
-        enabled: !!selectedRunId,
+        enabled: !!selectedRunId && serverOnline !== false,
     });
 
     const { data: logsData } = useQuery({
         queryKey: ["run-logs", selectedRunId],
         queryFn: () => getGlobalLogs({ runId: selectedRunId, limit: 200 }),
-        enabled: !!selectedRunId,
+        enabled: !!selectedRunId && serverOnline !== false,
     });
 
     const results        = resultsData?.results ?? [];
