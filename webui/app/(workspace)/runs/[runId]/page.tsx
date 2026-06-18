@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getRun, getRunResults } from "@/lib/api";
 import type { TestResult } from "@/lib/types/api";
-import { formatClock, formatDuration, formatRunDuration, resultVariant, statusVariant } from "@/lib/utils";
+import { formatClock, formatDuration, formatRunDuration, resultVariant, safeDecodeSegment, statusVariant } from "@/lib/utils";
 import { useAppShell } from "@/state/app-shell-context";
 
 function resultValue(result: TestResult): string {
@@ -25,7 +25,7 @@ function resultValue(result: TestResult): string {
 
 export default function RunDetailPage() {
     const params = useParams<{ runId: string }>();
-    const runId = decodeURIComponent(params.runId);
+    const runId = safeDecodeSegment(params.runId);
     const { setReviewingRunId, serverOnline } = useAppShell();
 
     const run = useQuery({

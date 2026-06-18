@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDuration, formatRunDuration, normalizeStatus, resultVariant } from "./utils";
+import { formatDuration, formatRunDuration, normalizeStatus, resultVariant, safeDecodeSegment } from "./utils";
 
 describe("formatDuration", () => {
     it("returns em-dash for falsy input", () => {
@@ -72,5 +72,25 @@ describe("resultVariant", () => {
     it("falls back to secondary for unknown", () => {
         expect(resultVariant("skipped")).toBe("secondary");
         expect(resultVariant(undefined)).toBe("secondary");
+    });
+});
+
+describe("safeDecodeSegment", () => {
+    it("returns empty string for nullish input", () => {
+        expect(safeDecodeSegment(undefined)).toBe("");
+        expect(safeDecodeSegment(null)).toBe("");
+        expect(safeDecodeSegment("")).toBe("");
+    });
+
+    it("decodes valid percent-encoded input", () => {
+        expect(safeDecodeSegment("hello%20world")).toBe("hello world");
+        expect(safeDecodeSegment("acadia%2Fdash")).toBe("acadia/dash");
+    });
+
+    it("returns the raw value when the input is malformed", () => {
+        // Trailing %E0%A4%A is a partial escape that throws URIError when decoded.
+        expect(() => decodeURIComponent("%E0%A4%A")).toThrow();
+        // safeDecodeSegment must NOT throw — it should return the raw string.
+        expect(safeDecodeSegment("%E0%A4%A")).toBe("%E0%A4%A");
     });
 });
