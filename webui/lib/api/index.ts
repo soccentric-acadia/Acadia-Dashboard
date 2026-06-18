@@ -1,4 +1,4 @@
-import { fetchJson } from "@/lib/api/client";
+import { apiUrl, fetchJson } from "@/lib/api/client";
 import type {
   ConfigsResponse,
   ConfigInfo,
@@ -74,7 +74,6 @@ export async function uploadOtaArtifact(file: File): Promise<unknown> {
   const formData = new FormData();
   formData.set("artifact", file);
 
-  const { apiUrl } = await import("@/lib/api/client");
   const response = await fetch(apiUrl("/api/v1/ota/upload"), {
     method: "POST",
     body: formData,
