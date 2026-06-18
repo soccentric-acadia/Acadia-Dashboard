@@ -57,7 +57,8 @@ export default function LogsPage() {
             const payload = parseSsePayload<LogEntry>((event as MessageEvent).data);
             if (payload) setLiveLogs((prev) => [...prev, payload].slice(-500));
         });
-        sourceStream.onerror = () => sourceStream.close();
+        // Don't close on error: EventSource auto-reconnects. Effect cleanup is
+        // the single place that closes the source.
         return () => sourceStream.close();
     }, [activeRunId]);
 
