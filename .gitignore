@@ -1,0 +1,14 @@
+# Acadia-Dashboard root gitignore
+
+# Contract test artefacts
+contract-tests/.venv/
+contract-tests/.pytest_cache/
+contract-tests/.coverage
+contract-tests/htmlcov/
+contract-tests/**/__pycache__/
+
+# Editor / OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/
