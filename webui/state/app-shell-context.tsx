@@ -150,7 +150,11 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
   // so a consumer of AppShellActionsContext that only calls setters
   // never re-renders.
   const registerModuleSearchFocus = useCallback((focusFn: (() => void) | null) => {
-    setModuleSearchFocusFn(() => focusFn);
+    // Direct value setter — wrap in an updater only when deriving from
+    // previous state. Wrapping `() => focusFn` here is misleading
+    // (reads like a state derivation) and would force a re-render on
+    // every call even when focusFn is referentially equal.
+    setModuleSearchFocusFn(focusFn);
   }, []);
   const focusModuleSearch = useCallback(() => {
     moduleSearchFocusFn?.();
