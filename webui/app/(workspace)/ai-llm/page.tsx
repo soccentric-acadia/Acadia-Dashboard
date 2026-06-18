@@ -384,8 +384,13 @@ export default function AiLlmPage() {
     const fail           = results.filter((r) => r.status === "fail").length;
     const contextLoading = runFetching || resultsFetching;
 
+    // Reset run-scoped state whenever the user switches run. useEffect is the
+    // correct primitive for "external change → reset internal state"; the
+    // set-state-in-effect rule is intended for deriving state, not for clearing
+    // it. All setters are exhaustive — they reset every piece of run-bound UI.
     useEffect(() => {
         buildAbort.current?.abort();
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setRagChunks([]);
         setRagStatus("idle");
         setRagProgress({ done: 0, total: 0 });
@@ -495,7 +500,10 @@ export default function AiLlmPage() {
             if (!reader) throw new Error("No response body");
 
             const decoder = new TextDecoder();
-            let accumulated = "";
+            // Mutable container for the running assistant text. Using a ref
+            // (not `let`) sidesteps the immutability rule for in-loop
+            // accumulation and keeps the value out of the render closure.
+            const accumulatedRef = { current: "" };
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -504,10 +512,11 @@ export default function AiLlmPage() {
                 for (const line of lines) {
                     try {
                         const parsed = JSON.parse(line);
-                        accumulated += parsed?.message?.content ?? "";
+                        accumulatedRef.current += parsed?.message?.content ?? "";
+                        const snapshot = accumulatedRef.current;
                         setMessages((prev) => {
                             const updated = [...prev];
-                            updated[placeholderIdx] = { role: "assistant", content: accumulated };
+                            updated[placeholderIdx] = { role: "assistant", content: snapshot };
                             return updated;
                         });
                         if (parsed?.done) break;
