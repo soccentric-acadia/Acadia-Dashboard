@@ -196,7 +196,7 @@ Each mode has a different result shape in the right column:
 
 #### General (single scrollable page, iOS Settings-style grouped rounded sections)
 - **Connection** — server address (host:port), connection status, latency, version of Server we're talking to.
-- **System** — what platform we're connected to (one of Arches / Acadia / Zion / Pinnacle / Joshua / Sequoia), firmware version, full peripheral inventory with capability flags.
+- **System** — what platform we're connected to (one of Acadia / Acadia / Zion / Pinnacle / Joshua / Sequoia), firmware version, full peripheral inventory with capability flags.
 - **Preferences** — light/dark mode (System / Light / Dark), table density, log auto-scroll default, anything else useful discovered from the API.
 - **Operator** — operator info slot (name/email/role) — leave a wired but empty form; auth is not in v1, but the form lives here.
 

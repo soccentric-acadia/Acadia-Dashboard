@@ -1,14 +1,9 @@
-# Acadia-Dashboard root gitignore
+# Python bytecode caches (contract-tests/ is pytest-based).
+__pycache__/
+*.pyc
+*.pyo
 
-# Contract test artefacts
-contract-tests/.venv/
-contract-tests/.pytest_cache/
-contract-tests/.coverage
-contract-tests/htmlcov/
-contract-tests/**/__pycache__/
-
-# Editor / OS noise
-.DS_Store
-*.swp
-.idea/
-.vscode/
+# Node (webui/ has its own, more thorough .gitignore; this is a repo-root
+# backstop in case files end up outside it).
+node_modules/
+.next/
