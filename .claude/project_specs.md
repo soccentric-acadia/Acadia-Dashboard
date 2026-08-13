@@ -1,6 +1,6 @@
 # Acadia-Dashboard — specs
 
-Remote: `git@github.com:SiliconCentric/Acadia-Dashboard.git`
+Remote: `git@github.com:soccentric-acadia/Acadia-Dashboard.git`
 Stack: node.
 
 A standalone dashboard UI leaf. Runs anywhere; not part of the on-device image.
