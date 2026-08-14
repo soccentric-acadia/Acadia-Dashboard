@@ -10,8 +10,12 @@
 IMAGE    ?= acadia-dashboard
 TAG      ?= latest
 PORT     ?= 3010
-CONTEXT  ?= ..                   # build context = repo root
-DOCKERFILE ?= $(CURDIR)/Dockerfile
+# Resolve paths relative to this Makefile's own location (not $(CURDIR)) so
+# both documented invocation styles work: `make -f docker/Makefile <target>`
+# from the repo root (CURDIR never changes) and `make <target>` from docker/.
+MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+CONTEXT    ?= $(MAKEFILE_DIR)..    # build context = repo root
+DOCKERFILE ?= $(MAKEFILE_DIR)Dockerfile
 
 .PHONY: build run stop logs shell clean
 
