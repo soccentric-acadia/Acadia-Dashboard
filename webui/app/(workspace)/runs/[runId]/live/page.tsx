@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Activity, CheckCircle2, Clock, XCircle, Pause, Loader2 } from "lucide-react";
+import { ArrowLeft, Activity, CheckCircle2, Clock, XCircle, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useLiveRunStream } from "@/lib/live-run/useLiveRunStream";
 import { tallyResults } from "@/lib/live-run/reducer";
-import { isTerminalRunStatus, type ModuleState } from "@/lib/live-run/types";
+import { type ModuleState } from "@/lib/live-run/types";
 import { formatClock, formatDuration, safeDecodeSegment } from "@/lib/utils";
 
 function ConnectionPill({ status }: { status: "connecting" | "open" | "closed" }) {

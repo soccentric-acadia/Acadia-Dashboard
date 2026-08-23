@@ -54,7 +54,12 @@ export function useLiveRunStream(runId: string): UseLiveRunStreamResult {
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
+    // Reset both the stream data and connection whenever runId changes. This is
+    // the "external change → reset internal state" effect (same pattern as
+    // app/(workspace)/ai-llm/page.tsx): all subsequent updates happen inside
+    // EventSource callbacks, which the rule allows.
     if (!runId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setConnection("closed");
       return;
     }

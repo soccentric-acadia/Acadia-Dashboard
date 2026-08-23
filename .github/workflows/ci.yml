@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "release/**"]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-typecheck:
+    name: Lint + typecheck (Node)
+    runs-on: ubuntu-24.04
+    container:
+      image: node:22-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: webui/node_modules
+          key: npm-${{ hashFiles('webui/package-lock.json') }}
+      - name: Install dependencies
+        working-directory: webui
+        run: npm ci --ignore-scripts
+      - name: Lint
+        working-directory: webui
+        run: npm run lint
+      - name: Typecheck
+        working-directory: webui
+        run: npm run type-check
+
+  build-docker:
+    name: Build Docker image
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: acadia-dashboard:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  unit-tests:
+    name: Unit tests (Vitest)
+    runs-on: ubuntu-24.04
+    container:
+      image: node:22-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: webui/node_modules
+          key: npm-${{ hashFiles('webui/package-lock.json') }}
+      - name: Install dependencies
+        working-directory: webui
+        run: npm ci --ignore-scripts
+      - name: Run unit tests
+        working-directory: webui
+        run: npm test -- --run
