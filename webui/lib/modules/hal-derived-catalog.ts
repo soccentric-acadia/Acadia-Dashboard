@@ -6478,5 +6478,80 @@ export const HAL_MODULE_CATALOG = [
         ]
       }
     ]
+  },
+  {
+    "id": "fan",
+    "name": "Cooling Fan",
+    "description": "PWM cooling fan presence, thermal zone, and speed control testing",
+    "version": "1.0.0",
+    "category": "io",
+    "result_type_url": "type.googleapis.com/hal.modules.fan.Result",
+    "config_type_url": "type.googleapis.com/hal.modules.fan.Config",
+    "source_path": "",
+    "modes": [
+      "single_shot",
+      "monitoring"
+    ],
+    "tests": [
+      {
+        "id": "fan_availability",
+        "name": "Fan Availability",
+        "description": "HAL test case fan_availability from the Cooling Fan module.",
+        "modes": [
+          "single_shot",
+          "monitoring"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "hdmi",
+    "name": "HDMI Display",
+    "description": "HDMI connector, monitor connection, resolution, and audio testing",
+    "version": "1.0.0",
+    "category": "media",
+    "result_type_url": "type.googleapis.com/hal.modules.hdmi.Result",
+    "config_type_url": "type.googleapis.com/hal.modules.hdmi.Config",
+    "source_path": "",
+    "modes": [
+      "single_shot",
+      "monitoring"
+    ],
+    "tests": [
+      {
+        "id": "hdmi_availability",
+        "name": "Hdmi Availability",
+        "description": "HAL test case hdmi_availability from the HDMI Display module.",
+        "modes": [
+          "single_shot",
+          "monitoring"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "wifi",
+    "name": "Wi-Fi",
+    "description": "Wi-Fi radio interface, link state, signal strength, and scan testing",
+    "version": "1.0.0",
+    "category": "networking",
+    "result_type_url": "type.googleapis.com/hal.modules.wifi.Result",
+    "config_type_url": "type.googleapis.com/hal.modules.wifi.Config",
+    "source_path": "",
+    "modes": [
+      "single_shot",
+      "monitoring"
+    ],
+    "tests": [
+      {
+        "id": "wifi_availability",
+        "name": "Wifi Availability",
+        "description": "HAL test case wifi_availability from the Wi-Fi module.",
+        "modes": [
+          "single_shot",
+          "monitoring"
+        ]
+      }
+    ]
   }
 ] satisfies HalModuleCatalogEntry[];
