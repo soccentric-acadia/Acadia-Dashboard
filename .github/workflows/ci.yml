@@ -65,3 +65,35 @@ jobs:
       - name: Run unit tests
         working-directory: webui
         run: npm test -- --run
+
+  contract-tests-server:
+    name: Contract tests against real Server API (task 25)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: dashboard
+      # The Dashboard contract tests prove the frontend against the REAL built
+      # Server API. Bring in the sibling Server, build+start it, then point the
+      # contract tests at it — never a stub.
+      - uses: actions/checkout@v4
+        with:
+          repository: soccentric-acadia/Acadia-Server
+          path: server
+      - name: Install uv
+        run: pipx install uv
+      - name: Set up Dashboard contract-test env
+        working-directory: dashboard/contract-tests
+        run: make setup
+      - name: Build + start real Server
+        working-directory: server
+        run: |
+          make build 2>&1 | tail -5
+          nohup ./build/native/bin/acadia-server > /tmp/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8080/health >/dev/null 2>&1 && break; sleep 2; done
+      - name: Run Dashboard contract tests against real Server
+        working-directory: dashboard/contract-tests
+        run: ACADIA_SERVER_URL=http://localhost:8080 make test
+      - name: Dump server log on failure
+        if: failure()
+        run: tail -c 8000 /tmp/server.log
