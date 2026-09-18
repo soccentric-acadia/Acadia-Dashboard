@@ -7,3 +7,7 @@ __pycache__/
 # backstop in case files end up outside it).
 node_modules/
 .next/
+
+# Per-task working artifacts.
+Plan.md
+Task.md
