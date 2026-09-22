@@ -23,6 +23,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY webui/ .
 
+# Server API base URL baked into the browser bundle at build time.
+ARG NEXT_PUBLIC_PLATFORM_SERVER=http://localhost:8080
+ENV NEXT_PUBLIC_PLATFORM_SERVER=${NEXT_PUBLIC_PLATFORM_SERVER}
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
