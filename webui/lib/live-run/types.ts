@@ -1,19 +1,27 @@
 /**
  * Live-run SSE event contract — mirrors Acadia-Server's
- * `GET /api/v1/runs/{run_id}/stream` event payloads (see
- * Acadia-Server/src/http/HttpServer.cc + services/RunService.cc).
+ * `GET /api/v1/runs/{run_id}/events` (see
+ * Acadia-Server/src/rest_api/controllers/RunsController.cc, `events()`).
  *
- * The server serialises run/result rows with the minimal util::ResultConvert
- * JSON serializer (no JsonCpp). Field shapes:
- *   - `run.start`      : { run: Run, modules: string[] }
- *   - `module.transition` : { module_id, state: "running" | "done" }
- *   - `result`         : a result row (see LiveResult)
- *   - `run.complete`    : { run: Run, total: number }
- *   - `flow.paused`    : "{}" (the viewer's bounded queue dropped an event)
+ * This previously documented a `run.start`/`module.transition`/`run.complete`/
+ * `flow.paused` vocabulary the Server never actually implements (DSH-001);
+ * the real contract is two named SSE events:
+ *   - `state`  : the full run row (see LiveRun) plus `type: "state"`. Sent
+ *                once on connect. The Server has no push for later status
+ *                changes yet (improvements.md DSH-001 follow-up) — a run
+ *                that finishes while a viewer is connected will not update
+ *                that viewer's terminal banner until they reconnect.
+ *   - `result` : a result row (see LiveResult), with no `type` field of its
+ *                own — the client tags it from the SSE event name.
  *
- * On (re)connect the server replays current state: one run.start + a result
- * event per already-landed top-level row. The client dedups result events by
- * id (high-water mark) so a reconnect resumes without duplication.
+ * There is no module-list or per-module "transition" event: `moduleOrder`/
+ * `modules` are derived client-side, purely from which `module_id`s have
+ * landed a result (see reducer.ts). A module a run intends to execute but
+ * that hasn't reported a result yet will not appear in the list.
+ *
+ * On (re)connect the server replays current state: one `state` event + a
+ * `result` event per already-landed top-level row. The client dedups result
+ * events by id (high-water mark) so a reconnect resumes without duplication.
  */
 
 export type RunStatus =
@@ -32,7 +40,9 @@ export interface LiveRun {
   name: string;
   mode: string;
   status: RunStatus;
-  board_id: string | null;
+  // Not emitted by run_to_json on the Server today (V-D04: runs have no
+  // board_id column yet) — always undefined in practice until that lands.
+  board_id?: string | null;
   started_at: string | null;
   ended_at: string | null;
   created_at: string | null;
@@ -57,19 +67,14 @@ export interface LiveResult {
   metrics: Record<string, unknown>;
   monitoring: Record<string, unknown>;
   event: Record<string, unknown>;
+  // Not emitted by result_to_json on the Server — always null in practice.
   parent_id: string | null;
 }
 
-export interface RunStartEvent {
-  type: "run.start";
+/** Sent once on connect (see the module docstring for the "no later push" gap). */
+export interface StateEvent {
+  type: "state";
   run: LiveRun;
-  modules: string[];
-}
-
-export interface ModuleTransitionEvent {
-  type: "module.transition";
-  module_id: string;
-  state: "pending" | "running" | "done";
 }
 
 export type ResultEvent = {
@@ -77,22 +82,7 @@ export type ResultEvent = {
   // All LiveResult fields are spread at the top level of the payload.
 } & LiveResult;
 
-export interface RunCompleteEvent {
-  type: "run.complete";
-  run: LiveRun;
-  total: number;
-}
-
-export interface FlowPausedEvent {
-  type: "flow.paused";
-}
-
-export type LiveRunEvent =
-  | RunStartEvent
-  | ModuleTransitionEvent
-  | ResultEvent
-  | RunCompleteEvent
-  | FlowPausedEvent;
+export type LiveRunEvent = StateEvent | ResultEvent;
 
 export type ModuleState = "pending" | "running" | "done";
 

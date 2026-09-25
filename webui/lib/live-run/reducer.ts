@@ -8,7 +8,6 @@ import {
   type LiveRunEvent,
   type LiveRunState,
   type LiveResult,
-  type ModuleState,
   isTerminalRunStatus,
 } from "./types";
 
@@ -36,48 +35,19 @@ export function liveRunReducer(
   event: LiveRunEvent,
 ): LiveRunState {
   switch (event.type) {
-    case "run.start": {
-      // run.start may arrive twice on reconnect (replay + live). The latest
-      // always wins; modules merge (replay modules + later transitions).
-      const modules = { ...state.modules };
-      const moduleOrder = [...state.moduleOrder];
-      for (const m of event.modules) {
-        if (!(m in modules)) {
-          modules[m] = "pending";
-          moduleOrder.push(m);
-        }
-      }
+    case "state": {
+      // Sent once on connect today (see types.ts docstring — the Server has
+      // no push for later status changes yet). A terminal status here means
+      // either a replay of an already-finished run, or — once that push
+      // exists — a live transition to terminal.
       return {
         ...state,
         run: event.run,
-        modules,
-        moduleOrder,
-        // A run.start with a terminal status (replay of a finished run) is
-        // treated as terminal — the live view will have rendered the banner.
-        terminal:
-          state.terminal || isTerminalRunStatus(event.run?.status),
+        terminal: state.terminal || isTerminalRunStatus(event.run?.status),
         terminalStatus:
           state.terminalStatus ??
           (isTerminalRunStatus(event.run?.status) ? event.run.status : null),
       };
-    }
-
-    case "module.transition": {
-      if (state.terminal) return state;
-      const modules = { ...state.modules };
-      const moduleOrder = [...state.moduleOrder];
-      if (!(event.module_id in modules)) {
-        moduleOrder.push(event.module_id);
-      }
-      const next: ModuleState = event.state;
-      // Don't regress from "done" back to "running" (a late transition after
-      // completion would be confusing); allow pending->running->done only.
-      const current = modules[event.module_id];
-      if (current === "done" && next !== "done") {
-        return state;
-      }
-      modules[event.module_id] = next;
-      return { ...state, modules, moduleOrder };
     }
 
     case "result": {
@@ -124,24 +94,6 @@ export function liveRunReducer(
         moduleOrder,
         lastEventSeq: Math.max(state.lastEventSeq, event.sequence),
       };
-    }
-
-    case "run.complete": {
-      // Terminal: once terminal, further events are ignored (the hook closes
-      // the EventSource). The terminal status from the event wins.
-      return {
-        ...state,
-        run: event.run,
-        terminal: true,
-        terminalStatus: event.run?.status ?? state.terminalStatus,
-        flowPaused: false,
-      };
-    }
-
-    case "flow.paused": {
-      // The server dropped an event from this viewer's bounded queue under
-      // backpressure. Surface it; the next non-duplicate event clears it.
-      return { ...state, flowPaused: true };
     }
 
     default: {

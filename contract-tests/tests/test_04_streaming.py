@@ -1,23 +1,42 @@
-"""Contract: SSE live-run stream (Acadia-Server /api/v1/runs/:id/stream).
+"""Contract: SSE live-run stream (Acadia-Server /api/v1/runs/:id/events).
 
-Locks the wire contract the Dashboard's live run view consumes:
-  - event names: run.start, module.transition, result, run.complete
-  - event order: run.start precedes result precedes run.complete
-  - run.complete carries a terminal status
-  - a second concurrent viewer on the same run receives the same run.complete
-  - a viewer that connects AFTER results have landed sees them replayed
-    (reconnect without duplication)
+DSH-001/VB-5 follow-up (2026-09-25): this file was written against a wire
+contract and a write-side REST surface (POST /api/v1/runs/{id}/start,
+/results, /complete) that do not exist in the current Acadia-Server —
+verified by reading RunsController.cc/.h directly, not by running this
+suite (it has never passed against the real server). The real contract has
+only two named SSE events, `state` (the full run row, sent once on connect —
+see RunsController::events) and `result` (a flat result row with no `type`
+field of its own); there is no `run.start`/`module.transition`/
+`run.complete`/`flow.paused` vocabulary, and no simple test-harness REST
+verbs to drive a run from outside — creating a run and injecting results
+goes through the real dispatch/auth/board path. See
+Acadia/tasks/012-live-run-view-contract-fix/ for the corrected client-side
+(webui) contract and Acadia/improvements.md DSH-001 for this gap. Skipped
+rather than deleted so the intent (lock the live-run wire contract with a
+real integration test) isn't lost; rewriting it needs a real run-creation
+path, which is a separate, larger task than the client fix that discovered
+this.
 
-Drive path: the Server exposes a minimal run-control REST surface alongside
-the SSE endpoint (POST /api/v1/runs, /start, /results, /complete). These are
-the write-side companions to the SSE read endpoint; the full REST API is
-Phase 2.
+Original docstring (kept for context, now inaccurate — see above):
+  Locks the wire contract the Dashboard's live run view consumes:
+    - event names: run.start, module.transition, result, run.complete
+    - event order: run.start precedes result precedes run.complete
+    - run.complete carries a terminal status
+    - a second concurrent viewer on the same run receives the same run.complete
+    - a viewer that connects AFTER results have landed sees them replayed
+      (reconnect without duplication)
 
-Run against a live Server:
-  ARCHES_HTTP_LISTEN=127.0.0.1:8080 ./build/native/bin/acadia-server &
-  ACADIA_SERVER_URL=http://localhost:8080 \
-    ../../../../Acadia-Dashboard/contract-tests/.venv/bin/python -m pytest \
-    contract-tests/tests/test_04_streaming.py -v -m streaming
+  Drive path: the Server exposes a minimal run-control REST surface alongside
+  the SSE endpoint (POST /api/v1/runs, /start, /results, /complete). These are
+  the write-side companions to the SSE read endpoint; the full REST API is
+  Phase 2.
+
+  Run against a live Server:
+    ARCHES_HTTP_LISTEN=127.0.0.1:8080 ./build/native/bin/acadia-server &
+    ACADIA_SERVER_URL=http://localhost:8080 \
+      ../../../../Acadia-Dashboard/contract-tests/.venv/bin/python -m pytest \
+      contract-tests/tests/test_04_streaming.py -v -m streaming
 """
 from __future__ import annotations
 
@@ -28,6 +47,13 @@ from typing import Any
 
 import httpx
 import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Targets a run.start/module.transition/run.complete SSE vocabulary "
+    "and POST /runs/{id}/start|results|complete REST verbs that do not exist "
+    "in the current Server (DSH-001 follow-up, 2026-09-25). Needs a real "
+    "run-creation/dispatch path to rewrite, not just a path fix."
+)
 
 
 def _create_run(http: httpx.Client, mode: str = "single_shot") -> str:
@@ -43,7 +69,7 @@ def _post(http: httpx.Client, run_id: str, action: str, body: dict[str, Any] | N
 
 def _collect_stream(server_url: str, run_id: str, deadline_s: float = 10.0) -> list[dict[str, Any]]:
     """Open the SSE stream and collect events until run.complete or deadline."""
-    url = f"{server_url}/api/v1/runs/{run_id}/stream"
+    url = f"{server_url}/api/v1/runs/{run_id}/events"
     events: list[dict[str, Any]] = []
     deadline = time.monotonic() + deadline_s
 
@@ -51,7 +77,7 @@ def _collect_stream(server_url: str, run_id: str, deadline_s: float = 10.0) -> l
         client = httpx.Client(timeout=deadline_s)
         try:
             with client.stream("GET", url) as resp:
-                assert resp.status_code == 200, f"GET /stream -> {resp.status_code}"
+                assert resp.status_code == 200, f"GET /events -> {resp.status_code}"
                 event_type: str | None = None
                 data_lines: list[str] = []
                 for line in resp.iter_lines():
@@ -175,7 +201,7 @@ def test_late_viewer_replays_existing_results(server_url: str, http: httpx.Clien
 
 @pytest.mark.streaming
 def test_sse_endpoint_404_for_unknown_run(server_url: str, http: httpx.Client) -> None:
-    r = http.get("/api/v1/runs/does-not-exist/stream")
+    r = http.get("/api/v1/runs/does-not-exist/events")
     # An EventSource would retry on non-200; the contract is that the server
     # returns 404 for an unknown run rather than an infinite empty stream.
     assert r.status_code == 404, f"expected 404 for unknown run, got {r.status_code}"
